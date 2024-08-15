@@ -4,9 +4,7 @@
 # - Mediciones diarias (días laborales lun-vie)
 # - Precio de la acción medido en pesos 
 
-# Grupo 2
-# Script elaborado por Cesar Prieto, Gabriel Peña, Sebastian Gil
-
+# Autor: Cesar Prieto
 
 # Librerías y directorio ----
 library(easypackages)
