@@ -187,7 +187,7 @@ acf(Sin.Tend.Spl, lag.max = 100)
 
 # ESTIMACION DE LA TENDENCIA USANDO REGRESION KERNEL ----
 
-Ker_BoxCox <- ksmooth(x = time(BoxCox2), y = BoxCox2, kernel = "normal", bandwidth = 0.1)
+Ker_BoxCox <- ksmooth(x = time(BoxCox2), y = BoxCox2, kernel = "normal", bandwidth = 0.3)
 
 plot(BoxCox2)
 lines(x = Ker_BoxCox$x, Ker_BoxCox$y, col = "red")
@@ -303,98 +303,125 @@ Tb_BoxCox %>%
   geom_boxplot() +
   labs(title = "Distribución de diferencias mensuales", x = "Mes", y = "Diferencia respecto al valor anterior")
 
-# ESTIMACION DE LA COMPONENTE ESTACIONAL PARA LA SERIE ORIGINAL ----
+# MODELAMIENTO DE LA ESTACIONALIDAD DE LA SERIE ----
+
 
 TsbApertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
+forecast::seasonaldummy(Apertura)
+Armonicos=TSA::harmonic(Apertura, m = 1)
 
-Mod.Est.Apertura <-  TsbApertura %>% model(
-  'Fourier (1 Componentes)' = ARIMA(Apertura ~ fourier(K = 1) + pdq(0, 0, 0) + PDQ(0, 0, 2)),
-  'Fourier (2 Componentes)' = ARIMA(Apertura ~ fourier(K = 2.5) + pdq(0, 0, 0) + PDQ(0, 0, 3)),
-  'Dummy' = ARIMA(Apertura ~ season() + pdq(0, 0, 0) + PDQ(0, 0, 1))
+### Armónicos
+forecast::fourier(Apertura,K=1)
+tiempo=1
+j=1
+sin(2*pi*tiempo*j/12)
+cos(2*pi*tiempo*j/12)
+
+
+###Gráfica de los armónicos
+harmonics = fourier(Apertura, K = 6)
+harmonics
+par(mar = c(1,4,1,1), mfrow = c(6,2))
+for(i in 1:ncol(harmonics)){
+  plot(harmonics[,i], type = 'l', xlab = "Time", ylab = colnames(harmonics)[i])
+}
+par(mar = rep(4, 4), mfrow=c(1,1))
+
+diff_TsbApertura <- TsbApertura |> 
+  mutate(logdiff_apertura = difference(log(Apertura))) |> 
+  select(Fecha, logdiff_apertura)
+
+Modelo_serie_diff<-diff_TsbApertura|>model(
+  `Fourier1Airdiff`=ARIMA(logdiff_apertura~fourier(K=2)+pdq(0, 0, 0) + PDQ(0, 0, 0))
 )
 
-Mod.Ajd.Est.Apertura <- TsbApertura%>%
-  left_join(fitted(Mod.Est.Apertura)|>group_by(.model)%>%
+real_ajustado1<-diff_TsbApertura%>%left_join(fitted(Modelo_serie_diff,by=index))%>%select(-.model) 
+
+real_ajustado1 %>%
+  autoplot() +
+  geom_line(data=real_ajustado1,aes(y=logdiff_apertura,colour="real"))+
+  geom_line(data=real_ajustado1,aes(y=.fitted,colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustado" = "red"))
+
+#####Ajuste Dummy
+
+Modelo_serie_diff_Dummy <- diff_TsbApertura|>model(
+  `DummyAirdiff`=ARIMA(logdiff_apertura~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+)
+
+Modelo_serie_diff_Dummy <- diff_TsbApertura %>% left_join(fitted(Modelo_serie_diff,by=index)) %>%
+  select(-.model) 
+
+Modelo_serie_diff_Dummy %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=logdiff_apertura,colour="real"))+
+  geom_line(data=Modelo_serie_diff_Dummy,aes(y=.fitted,colour="ajustado"))+
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustado" = "red"))
+
+#### Varios modelos la mismo tiempo
+
+ajuste_final_models<-diff_TsbApertura%>%model(
+  `Fourier1Airdiff`=ARIMA(logdiff_apertura~fourier(K=1)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  `Fourier2Airdiff`=ARIMA(logdiff_apertura~fourier(K=2)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  `Fourier3Airdiff`=ARIMA(logdiff_apertura~fourier(K=3)+pdq(0, 0, 0) + PDQ(0, 0, 0)),
+  `DummyAirdiff`=ARIMA(logdiff_apertura~season()+pdq(0, 0, 0) + PDQ(0, 0, 0))
+)
+
+glance(ajuste_final_models)
+
+ajuste_final_models %>%
+  select(Fourier1Airdiff)%>%coef()
+
+Modelo_serie_diff_models <- diff_TsbApertura %>%
+  left_join(fitted(ajuste_final_models)|>group_by(.model)%>%
               pivot_wider(names_from = .model, values_from = .fitted))
 
-# Obtener sigma^2, AIC y BIC de los modelos en Mod.Est.Apertura
-model_results <- Mod.Est.Apertura %>%
-  glance() %>%
-  select(.model, sigma2, AIC, BIC)
 
-# Agregar información adicional sobre los modelos
-model_results <- model_results %>%
-  mutate(Modelo = case_when(
-    .model == 'Fourier (1 Componentes)' ~ 'Fourier (1 Componentes)',
-    .model == 'Fourier (2 Componentes)' ~ 'Fourier (2 Componentes)',
-    .model == 'Dummy' ~ 'Dummy'
-  )) %>%
-  select(Modelo, sigma2, AIC, BIC)
 
-# Mostrar la tabla con los resultados
-print(model_results)
+Modelo_serie_diff_models %>%
+  autoplot() +
+  geom_line(data=Modelo_serie_diff_models,aes(y=diff_TsbApertura,colour="real"))+
+  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier1Airdiff,colour="ajustadoFourier1"))+
+  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier2Airdiff,colour="ajustadoFourier2"))+ 
+  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier3Airdiff,colour="ajustadoFourier3"))+
+  geom_line(data=Modelo_serie_diff_models,aes(y=DummyAirdiff,colour="ajustadoDummy")) +
+  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustadoFourier1" = "red","ajustadoFourier2" = "blue","ajustadoFourier3"="green","ajustadoDummy"="yellow"))
 
-Mod.Ajd.Est.Apertura = as.data.frame(Mod.Ajd.Est.Apertura)
 
-# Establecer el diseño de las gráficas
-par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))  # 3 filas, 1 columna, márgenes ajustados
+ajuste_final_models <- diff_TsbApertura %>% model(
+  `Fourier1Airdiff` = ARIMA(logdiff_apertura ~ fourier(K = 1) + pdq(1, 0, 0) + PDQ(0, 0, 0)),
+  `Fourier2Airdiff` = ARIMA(logdiff_apertura ~ fourier(K = 2) + pdq(1, 0, 0) + PDQ(0, 0, 0)),
+  `Fourier3Airdiff` = ARIMA(logdiff_apertura ~ fourier(K = 3) + pdq(1, 0, 0) + PDQ(0, 0, 0)),
+  `DummyAirdiff` = ARIMA(logdiff_apertura ~ season() + pdq(1, 0, 0) + PDQ(0, 0, 0))
+)
 
-# Graficar cada serie de datos ajustada por separado
-for (i in 3:5) {  # Columnas 3 a 5 corresponden a 'Fourier (2 Componentes)', 'Fourier (3 Componentes)', 'Dummy'
-  # Nombre de la columna actual
-  col_name <- colnames(Mod.Ajd.Est.Apertura)[i]
-  
-  # Graficar los datos originales vs. valores ajustados para la columna actual
-  plot(
-    x = Mod.Ajd.Est.Apertura$Fecha,
-    y = Mod.Ajd.Est.Apertura[, i],
-    type = 'l',
-    col = 'red',  # Color para la serie ajustada
-    lwd = 1.2,  # Grosor de la línea
-    ylim = c(min(Mod.Ajd.Est.Apertura[, c(3:5)], na.rm = TRUE), max(Mod.Ajd.Est.Apertura[, c(3:5)], na.rm = TRUE)),  # Establecer límites del eje y
-    main = paste("Datos Originales vs. Valores Ajustados:", col_name),
-    xlab = "Fecha",
-    ylab = "Valor"
+# Unir los valores ajustados
+Modelo_serie_diff_models <- diff_TsbApertura %>%
+  left_join(
+    fitted(ajuste_final_models) %>% 
+      group_by(.model) %>%
+      pivot_wider(names_from = .model, values_from = .fitted),
+    by = "Fecha"
   )
-  
-  # Agregar la línea de los datos originales ('value') en negro
-  lines(
-    x = Mod.Ajd.Est.Apertura$Fecha,
-    y = Mod.Ajd.Est.Apertura$Apertura,
-    type = 'l',
-    col = 'black',  # Color negro para los datos originales
-    lwd = 0.7  # Grosor de la línea
-  )
-}
-
-par(mfrow = c(1,1))
-
-# PRONOSTICO BASADO EN DESCOMPOSICION ----
-
-fit <- stl(Sin.Tend.Ker, s.window = 7, s.degree = 1, t.degree = 1, robust = TRUE)
-
-# Obtener la componente ajustada estacionalmente
-seasadj_fit <- seasadj(fit)
-
-# Realizar la predicción naive
-naive_forecast <- naive(seasadj_fit, h = 30) # Aumenta el horizonte de predicción
-
-# Visualizar la predicción con autoplot y ggplot2
-autoplot(naive_forecast) +
-  ylab("Nuevo índices ordenados.") +
-  ggtitle("Pronóstico Naive de la componente ajustada estacionalmente") +
-  theme_minimal() + # Usar un tema minimalista
-  theme(
-    plot.title = element_text(hjust = 0.5), # Centrar el título
-    legend.position = "bottom", # Colocar la leyenda en la parte inferior
-    legend.title = element_blank() # Quitar el título de la leyenda
-  ) +
-  scale_color_manual(values = c("blue", "red")) + # Personalizar colores
-  scale_fill_manual(values = c("lightblue", "pink")) # Personalizar colores de bandas
 
 
-fit %>% forecast(method="naive") %>%
-  autoplot() + ylab("New orders index")
+# Convertir a un formato largo para facilitar el uso de facet_wrap
+Modelo_serie_diff_long <- Modelo_serie_diff_models %>%
+  pivot_longer(cols = starts_with("Fourier") | starts_with("Dummy"),
+               names_to = "Modelo",
+               values_to = "Ajuste")
+
+# Crear gráficas separadas usando facet_wrap
+Modelo_serie_diff_long %>%
+  ggplot(aes(x = Fecha)) +
+  geom_line(aes(y = logdiff_apertura, colour = "Real"), color = "black") +
+  geom_line(aes(y = Ajuste, colour = Modelo)) +
+  scale_color_manual(values = c( "red", "blue", "green", "yellow")) +
+  facet_wrap(~ Modelo, ncol = 2) +
+  labs(title = "MODELAMIENTO DE LA ESTACIONALIDAD DE LA SERIE",
+       y = "Diferencia logarítmica", color = "Series") +
+  theme_minimal()
+
 
 # SUAVIZAMIENTO EXPONENCIAL ----
 
