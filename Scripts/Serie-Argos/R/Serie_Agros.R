@@ -376,18 +376,6 @@ Modelo_serie_diff_models <- diff_TsbApertura %>%
   left_join(fitted(ajuste_final_models)|>group_by(.model)%>%
               pivot_wider(names_from = .model, values_from = .fitted))
 
-
-
-Modelo_serie_diff_models %>%
-  autoplot() +
-  geom_line(data=Modelo_serie_diff_models,aes(y=diff_TsbApertura,colour="real"))+
-  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier1Airdiff,colour="ajustadoFourier1"))+
-  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier2Airdiff,colour="ajustadoFourier2"))+ 
-  geom_line(data=Modelo_serie_diff_models,aes(y=Fourier3Airdiff,colour="ajustadoFourier3"))+
-  geom_line(data=Modelo_serie_diff_models,aes(y=DummyAirdiff,colour="ajustadoDummy")) +
-  scale_color_manual(name = "real/ajustado", values = c("real" = "black", "ajustadoFourier1" = "red","ajustadoFourier2" = "blue","ajustadoFourier3"="green","ajustadoDummy"="yellow"))
-
-
 ajuste_final_models <- diff_TsbApertura %>% model(
   `Fourier1Airdiff` = ARIMA(logdiff_apertura ~ fourier(K = 1) + pdq(1, 0, 0) + PDQ(0, 0, 0)),
   `Fourier2Airdiff` = ARIMA(logdiff_apertura ~ fourier(K = 2) + pdq(1, 0, 0) + PDQ(0, 0, 0)),
@@ -425,277 +413,120 @@ Modelo_serie_diff_long %>%
 
 # SUAVIZAMIENTO EXPONENCIAL ----
 
-STK <- as.matrix(Sin.Tend.Ker)
-STK <- as.matrix(cbind(as.Date(G_ARGOS[,1]), STK))
-STK <- as.data.frame(STK)
-names <-  c("Fecha", "Apertura")
-colnames(STK) <- names
-STK$Fecha <- as.Date(STK$Fecha) 
-ST_Kernel <- as_tsibble(STK[,c(1,2)], index = Fecha)
+TsbApertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
+TsbBoxCox <- cbind(G_ARGOS[,c(1,3)], BoxCox2)
+TsbBoxCox <- as_tsibble(TsbBoxCox, index = Fecha)
 
-HWAP <- HoltWinters(Sin.Tend.Ker, seasonal = "additive")
+P <- expand.grid('beta' = list(F, NULL), 'gamma' = list(F, NULL), 'seasonal' = list('additive', 'multiplicative'))
 
-plot(HWAP)
+# Definir las fechas de inicio y fin
+fecha_inicio <- as.Date("2010-01-04")
+fecha_fin <- as.Date("2019-12-31")
 
-ajustados <- fitted(HWAP)
-plot(ajustados)
+# Crear un vector de fechas
+fechas <- seq(fecha_inicio, fecha_fin, by = "day")
 
-summary(HWAP)
+# Asumiendo que BoxCox2 es tu vector de datos transformados
+# Si no lo tienes, reemplaza BoxCox2 con tus datos reales
+BoxCox <- ts(BoxCox2, start = c(2010, 4), frequency = 365)
 
-predictionHWAP=forecast::forecast(HWAP, h=30, level =0.95, lambda = 0)
-predictionHWAP
-plot(predictionHWAP, xlim = c(2018,2020.0822))
+# Calcular el punto de división para el 70%
+n <- length(BoxCox)
+punto_division <- floor(n * 0.7)
 
-ajustepass <- ST_Kernel %>%
-  model(ETS(Apertura~ error("A")+trend("A")+season("A")))
+# Crear los conjuntos de entrenamiento y prueba
+BoxCox_train <- window(BoxCox, end = time(BoxCox)[punto_division])
+BoxCox_test <- window(BoxCox, start = time(BoxCox)[punto_division + 1])
 
-pronostico=ajustepass%>%
-  fabletools::forecast(h=60)
-pronostico
+# Ajustar las fechas de inicio para train y test
+fecha_inicio_test <- fechas[punto_division + 1]
 
-pronostico %>% autoplot(ST_Kernel) +
-  geom_line(aes(y=.fitted),col="#D55E00",data=augment(ajustepass)) + 
-  labs(y=" ",title="Pronósticos ajustados") + 
-  guides(colour="none")
+# Crear las series de tiempo finales
+BoxCox_train <- ts(BoxCox_train, start = c(year(fecha_inicio), yday(fecha_inicio)), frequency = 365)
+BoxCox_test <- ts(BoxCox_test, start = c(year(fecha_inicio_test), yday(fecha_inicio_test)), frequency = 365)
 
-modelos <- ST_Kernel %>%
-  model(ets=ETS(Apertura ~ error("A")+trend("A")+season("A")),
-        stl=decomposition_model(STL(Apertura ~ trend(window = 13) +
-                                      season(window = "periodic"),
-                                    robust = TRUE),NAIVE(season_adjust)))
-modelos 
+# Imprimir información sobre los conjuntos
+print(paste("Inicio del conjunto de entrenamiento:", start(BoxCox_train)))
+print(paste("Fin del conjunto de entrenamiento:", end(BoxCox_train)))
+print(paste("Inicio del conjunto de prueba:", start(BoxCox_test)))
+print(paste("Fin del conjunto de prueba:", end(BoxCox_test)))
 
-# Realizar la predicción
-predicciones <- modelos %>% fabletools::forecast(h = 30)
+FE_Apertura = data.frame(matrix(ncol = 6, nrow = nrow(P)))
 
-# Visualizar el pronóstico desde 2018
-autoplot(predicciones, ST_Kernel) +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y",
-               limits = as.Date(c("2018-01-01", NA))) +
-  ylab("Nuevo índices ordenados.") +
-  ggtitle("Pronóstico desde 2018") +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    legend.position = "bottom",
-    legend.title = element_blank()
-  )
+colnames(FE_Apertura) = c('alpha', 'beta', 'gamma', 'seasonal','MSE', 'MSE test')
 
-# MODELTIME PARA ETS 
-
-Aper_tbl <- as_tibble(ST_Kernel)
-Aper_tbl$index = as.Date(ST_Kernel$Fecha)
-Aper_tbl <- Aper_tbl %>% mutate(Apertura2 = exp(Apertura))
-
-Aper_tbl <- Aper_tbl[,c(1,2,4)]
-
-Aper_tbl
-
-
-splits_Aper_tbl = timetk::time_series_split(Aper_tbl, date_var = Fecha, 
-                                            assess = 1000 ,cumulative = TRUE)
-
-splits_Aper_tbl %>% tk_time_series_cv_plan()%>%
-  plot_time_series_cv_plan(Fecha, Apertura2)
-
-ets_Apertura <- modeltime::exp_smoothing(
-  error="additive",
-  trend="additive",
-  season="additive"
-) %>%
-  set_engine("ets")%>%
-  fit(Apertura2 ~ Fecha, data = training(splits_Aper_tbl))
-
-# Modeltime ----
-
-modeltime_table(ets_Apertura) %>%
-  modeltime_calibrate(testing(splits_Aper_tbl))%>%
-  modeltime_forecast(
-    new_data = testing(splits_Aper_tbl),
-    actual_data = Aper_tbl
-  )%>%
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-
-pronostico_ets<-modeltime_table(ets_Apertura) %>%
-  modeltime_calibrate(testing(splits_Aper_tbl))%>%
-  modeltime_forecast(
-    new_data = testing(splits_Aper_tbl),
-    actual_data = Aper_tbl
-  )
-
-pronostico_ets 
-
-## Modeltime
-
-model_tbl<-modeltime_table(ets_Apertura)
-
-## Calibración 
-
-calibration_tbl<-model_tbl%>%
-  modeltime_calibrate(testing(splits_Aper_tbl))
-
-## Prueba de pronóstico
-
-calibration_tbl%>%
-  modeltime_forecast(
-    new_data = testing(splits_Aper_tbl),
-    actual_data = Aper_tbl
-  ) 
-
-## Residuales 
-
-residuales_ajuste <- model_tbl %>%
-  modeltime_calibrate(new_data=training(splits_Aper_tbl))%>%
-  modeltime_residuals()
-
-residuales_ajuste %>% plot_modeltime_residuals(
-  .type="timeplot",
-  .interactive = TRUE)
-
-### Precisión de los pronósticos
-
-calibration_tbl%>%
-  modeltime_accuracy()
-
-## Re-ajuste y predicción de valores futuros
-
-re_ajuste <- calibration_tbl %>%
-  modeltime_refit(data = Aper_tbl)
-
-re_ajuste%>%
-  modeltime_forecast(h = 365,
-                     actual_data = Aper_tbl
-  )%>%
-  plot_modeltime_forecast()
-
-## Especificando algunos valores del modelo 
-
-ets_Apertura_fixed<-modeltime::exp_smoothing(
-  error="additive",
-  trend="additive",
-  season="additive",
-  smooth_level=0.5,
-  smooth_trend=0.02,
-  smooth_seasonal=0.01
-)%>%
-  set_engine("ets")%>%
-  fit(BoxCox2 ~ Fecha, data = training(splits_Aper_tbl))
-
-# modeltime
-
-modeltime_table(ets_Apertura_fixed) %>%
-  modeltime_calibrate(testing(splits_Aper_tbl))%>%
-  modeltime_forecast(
-    new_data = testing(splits_Aper_tbl),
-    actual_data = Aper_tbl
-  )%>%
-  plot_modeltime_forecast(.conf_interval_fill = "lightblue")
-
-pronostico_ets 
-
-
-## Modeltime
-
-model_tbl_fixed <- modeltime_table(ets_Apertura_fixed)
-
-## Calibración 
-
-calibration_tbl_fixed <- model_tbl_fixed %>%
-  modeltime_calibrate(testing(splits_Aper_tbl))
-
-## Prueba de pronóstico
-
-calibration_tbl_fixed %>%
-  modeltime_forecast(
-    new_data = testing(splits_Aper_tbl),
-    actual_data = Aper_tbl
-  ) 
-
-### Precisión de los pronósticos
-
-calibration_tbl_fixed%>%
-  modeltime_accuracy()
-
-# EVALUACION DE PRONOSTICOS ----
-
-# Definir h
-h <- 30
-
-# Definir las longitudes de la serie y la porción de entrenamiento
-lserie <- length(BoxCox2)
-ntrain <- trunc(lserie * 0.85)
-
-# Crear conjuntos de entrenamiento y prueba
-train <- window(BoxCox2, end = time(BoxCox2)[ntrain])
-test <- window(BoxCox2, start = time(BoxCox2)[ntrain] + 1/365)
-
-# Inicializar variables
-ntest <- length(test)
-fchstepahe <- matrix(0, nrow = ntest, ncol = h)
-
-verval <- matrix(NA, nrow = ntest, ncol = h)
-for (j in 1:h) {
-  verval[1:(ntest - j + 1), j] <- test[j:ntest]
-}
-colnames(verval) <- paste0("h", 1:h)
-
-
-# Ajuste del modelo Holt-Winters
-HWAP_train <- stats::HoltWinters(train, seasonal = "additive")
-
-# Extracción de parámetros del modelo
-alpha <- HWAP_train$alpha
-beta <- HWAP_train$beta
-gamma <- HWAP_train$gamma
-
-# Refinamiento y predicción
-for (i in 1:ntest) {
-  x <- window(BoxCox2, end = time(BoxCox2)[ntrain] + (i - 1) / 365)
-  refit <- stats::HoltWinters(x, seasonal = "additive", alpha = alpha, 
-                              beta = beta, gamma = gamma)
-  fchstepahe[i, ] <- as.numeric(forecast::forecast(refit, h = h)$mean)
+for (i in 1:nrow(P)){
+  modeloExponencial = stats::HoltWinters(x = BoxCox_train,
+                                         alpha = NULL,
+                                         beta = parametros$beta[[i]],
+                                         gamma = parametros$gamma[[i]],
+                                         seasonal = parametros$seasonal[[i]])
+  # seasonal sólo debería tenerse en cuenta cuando se tiene un valor distinto a FALSE para gamma
+  FE_Apertura[i, c('alpha', 'beta', 'gamma', 'seasonal')] = c(modeloExponencial$alpha,
+                                                                          modeloExponencial$beta,
+                                                                          modeloExponencial$gamma,
+                                                                          modeloExponencial$seasonal)
+  FE_Apertura[i, 'MSE'] = mean((BoxCox_train - modeloExponencial$fitted[,'xhat'])**2)
+  prediccion = predict(modeloExponencial, 365)
+  FE_Apertura[i, 'MSE test'] = mean((BoxCox - prediccion)**2)
 }
 
-# Cálculo de errores
+FEO_Apertura <- FE_Apertura %>%
+  arrange('MSE', 'MSE test')
 
-errores_pred <- fchstepahe - verval
-ECM <- apply(errores_pred^2, MARGIN = 2, mean, na.rm = TRUE)
-RECM <- sqrt(ECM)
-RECM
+head(FEO_Apertura)
 
+ModExp1 = stats::HoltWinters(BoxCox_train,
+                            beta = FALSE,
+                            seasonal = 'additive')
+plot(fitted(ModExp1))
 
-# ROLLING ----
+# Graficar resultados
+par(mar = c(5, 4, 4, 5))
+plot.ts(BoxCox, col = 'gray21',
+        main = 'Precio de la acción del grupo Argos en la apertura',
+        ylab = 'Precio',
+        xlab = 'Tiempo')
 
-library(greybox)
+# Graficar valores ajustados
+# ModExp$fitted['xhat'] ya es una serie de tiempo, podemos utilizarla directamente
+lines(ModExp1$fitted[, 'xhat'], col = 'red')
 
+# Graficar predicciones
+# Asegurarse de que los valores predichos sean una serie temporal con el mismo inicio y frecuencia
+predicted_values <- predict(ModExp1, length(BoxCox_test))
+predicted_values <- ts(predicted_values, start = start(BoxCox_test), frequency = frequency(BoxCox_test))
+lines(predicted_values, col = 'orange')
 
-# Definir y ajustar el modelo Holt-Winters
-HWAP_train <- stats::HoltWinters(train, seasonal = "additive")
+# Leyenda
+legend('topright', legend = c('Datos originales', 'Valores ajustados', 'Test'), 
+       col = c('gray21', 'red', 'orange'), lty = 1, bty = 'n', lwd = c(1, 2, 2))
 
-# Definir 'ourCallETS' y 'ourValueETS'
-ourCallETS <- "forecast::forecast(stats::HoltWinters(train, alpha=HWAP_train$alpha, beta=HWAP_train$beta, gamma=HWAP_train$gamma), h=h, level=95)"
-ourValueETS <- c("mean", "lower", "upper")
-
-# Llamada a 'ro' para generar predicciones
-origins <- 30
-Valoresretornados1 <- ro(BoxCox2, h = h, origins = origins, call = ourCallETS, value = ourValueETS, ci = FALSE, co = FALSE)
-
-# Verificar dimensiones
-holdout_dim <- dim(Valoresretornados1$holdout)
-mean_dim <- dim(Valoresretornados1$mean)
-print(paste("Dimensiones de holdout: ", toString(holdout_dim)))
-print(paste("Dimensiones de mean: ", toString(mean_dim)))
-
-# Calcular el error si las dimensiones coinciden
-if (all(holdout_dim == mean_dim)) {
-  RECM <- apply(sqrt((Valoresretornados1$holdout - Valoresretornados1$mean)^2), 1, mean, na.rm=TRUE)
-  RECM
-} else {
-  stop("Dimensiones de 'holdout' y 'mean' no coinciden.")
-}
+# --------------
 
 
-apply(abs(Valoresretornados1$holdout - -Valoresretornados1$mean),
-      1, mean, na.rm = TRUE) / mean(Valoresretornados1$actuals) ### Error medio absoluto escalado
+ModExp2 = stats::HoltWinters(BoxCox_train,
+                             beta = FALSE,
+                             seasonal = 'multiplicative')
+plot(fitted(ModExp2))
 
+# Graficar resultados
+par(mar = c(5, 4, 4, 5))
+plot.ts(BoxCox, col = 'gray21',
+        main = 'Precio de la acción del grupo Argos en la apertura',
+        ylab = 'Precio',
+        xlab = 'Tiempo')
 
+# Graficar valores ajustados
+# ModExp$fitted['xhat'] ya es una serie de tiempo, podemos utilizarla directamente
+lines(ModExp2$fitted[, 'xhat'], col = 'red')
+
+# Graficar predicciones
+# Asegurarse de que los valores predichos sean una serie temporal con el mismo inicio y frecuencia
+predicted_values <- predict(ModExp2, length(BoxCox_test))
+predicted_values <- ts(predicted_values, start = start(BoxCox_test), frequency = frequency(BoxCox_test))
+lines(predicted_values, col = 'orange')
+
+# Leyenda
+legend('topright', legend = c('Datos originales', 'Valores ajustados', 'Test'), 
+       col = c('gray21', 'red', 'orange'), lty = 1, bty = 'n', lwd = c(1, 2, 2))
