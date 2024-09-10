@@ -413,14 +413,12 @@ Modelo_serie_diff_long %>%
 
 # SUAVIZAMIENTO EXPONENCIAL ----
 
-TsbApertura <- as_tsibble(G_ARGOS[,c(1,3)], index = Fecha)
-TsbBoxCox <- cbind(G_ARGOS[,c(1,3)], BoxCox2)
-TsbBoxCox <- as_tsibble(TsbBoxCox, index = Fecha)
-
-P <- expand.grid('beta' = list(F, NULL), 'gamma' = list(F, NULL), 'seasonal' = list('additive', 'multiplicative'))
+P <- expand.grid('beta' = list(F, NULL),
+                 'gamma' = list(F, NULL),
+                 'seasonal' = list('additive', 'multiplicative'))
 
 # Definir las fechas de inicio y fin
-fecha_inicio <- as.Date("2010-01-04")
+fecha_inicio <- as.Date("2010-01-05")
 fecha_fin <- as.Date("2019-12-31")
 
 # Crear un vector de fechas
@@ -428,7 +426,7 @@ fechas <- seq(fecha_inicio, fecha_fin, by = "day")
 
 # Asumiendo que BoxCox2 es tu vector de datos transformados
 # Si no lo tienes, reemplaza BoxCox2 con tus datos reales
-BoxCox <- ts(BoxCox2, start = c(2010, 4), frequency = 365)
+BoxCox <- ts(Diff_BoxCox, start = c(2010, 4), frequency = 365)
 
 # Calcular el punto de división para el 70%
 n <- length(BoxCox)
@@ -445,62 +443,85 @@ fecha_inicio_test <- fechas[punto_division + 1]
 BoxCox_train <- ts(BoxCox_train, start = c(year(fecha_inicio), yday(fecha_inicio)), frequency = 365)
 BoxCox_test <- ts(BoxCox_test, start = c(year(fecha_inicio_test), yday(fecha_inicio_test)), frequency = 365)
 
-# Imprimir información sobre los conjuntos
-print(paste("Inicio del conjunto de entrenamiento:", start(BoxCox_train)))
-print(paste("Fin del conjunto de entrenamiento:", end(BoxCox_train)))
-print(paste("Inicio del conjunto de prueba:", start(BoxCox_test)))
-print(paste("Fin del conjunto de prueba:", end(BoxCox_test)))
 
 FE_Apertura = data.frame(matrix(ncol = 6, nrow = nrow(P)))
 
 colnames(FE_Apertura) = c('alpha', 'beta', 'gamma', 'seasonal','MSE', 'MSE test')
 
-for (i in 1:nrow(P)){
-  modeloExponencial = stats::HoltWinters(x = BoxCox_train,
-                                         alpha = NULL,
-                                         beta = parametros$beta[[i]],
-                                         gamma = parametros$gamma[[i]],
-                                         seasonal = parametros$seasonal[[i]])
-  # seasonal sólo debería tenerse en cuenta cuando se tiene un valor distinto a FALSE para gamma
-  FE_Apertura[i, c('alpha', 'beta', 'gamma', 'seasonal')] = c(modeloExponencial$alpha,
-                                                                          modeloExponencial$beta,
-                                                                          modeloExponencial$gamma,
-                                                                          modeloExponencial$seasonal)
-  FE_Apertura[i, 'MSE'] = mean((BoxCox_train - modeloExponencial$fitted[,'xhat'])**2)
-  prediccion = predict(modeloExponencial, 365)
-  FE_Apertura[i, 'MSE test'] = mean((BoxCox - prediccion)**2)
+cross_validate_hw <- function(ts_data, params, h = 365, k_folds = 10) {
+  n <- length(ts_data)
+  fold_size <- floor(n / k_folds)
+  
+  errors <- numeric(k_folds)
+  
+  for (k in 1:k_folds) {
+    end_train <- n - (k_folds - k) * fold_size
+    ts_train <- window(ts_data, end = time(ts_data)[end_train])
+    ts_test <- window(ts_data, start = time(ts_data)[end_train + 1])
+    
+    # Agregar mensajes de depuración para verificar los valores
+    print(paste("Fold:", k, "Train end:", time(ts_data)[end_train], "Test start:", time(ts_data)[end_train + 1]))
+    
+    # Verificar que las ventanas no sean NULL o NA
+    if (is.null(ts_train) || is.null(ts_test)) {
+      stop("Error: Train or test set is NULL")
+    }
+    
+    # Ajustar el modelo Holt-Winters
+    model <- HoltWinters(ts_train,
+                         alpha = params$alpha,
+                         beta = params$beta,
+                         gamma = params$gamma,
+                         seasonal = params$seasonal)
+    
+    # Predicciones
+    predictions <- predict(model, h = h)
+    
+    # Calcular el MSE para este fold
+    errors[k] <- mean((ts_test - predictions)^2)
+  }
+  
+  return(mean(errors))
 }
 
-FEO_Apertura <- FE_Apertura %>%
-  arrange('MSE', 'MSE test')
+# Ajustar un modelo Holt-Winters optimizando los parámetros alpha, beta, gamma
+optimize_hw <- function(ts_data, h = 365) {
+  model <- HoltWinters(ts_data, 
+                       alpha = NULL, 
+                       beta = NULL, 
+                       gamma = NULL,
+                       seasonal = "additive")
+  
+  # Predecir para el conjunto de prueba
+  predictions <- predict(model, h = h)
+  
+  # Calcular el MSE
+  return(list(model = model, mse = mean((BoxCox_test - predictions)^2)))
+}
 
-head(FEO_Apertura)
+# Ejecutar la optimización
+best_model <- optimize_hw(BoxCox_train)
 
-ModExp1 = stats::HoltWinters(BoxCox_train,
-                            beta = FALSE,
-                            seasonal = 'additive')
-plot(fitted(ModExp1))
+# Visualizar el resultado
+plot(fitted(best_model$model))
 
-# Graficar resultados
+# Definir márgenes para la gráfica
 par(mar = c(5, 4, 4, 5))
+
+# Graficar la serie temporal original
 plot.ts(BoxCox, col = 'gray21',
         main = 'Precio de la acción del grupo Argos en la apertura',
         ylab = 'Precio',
         xlab = 'Tiempo')
 
-# Graficar valores ajustados
-# ModExp$fitted['xhat'] ya es una serie de tiempo, podemos utilizarla directamente
-lines(ModExp1$fitted[, 'xhat'], col = 'red')
+# Graficar los valores ajustados del mejor modelo (fitted)
+lines(best_model$model$fitted[, 'xhat'], col = 'red', lwd = 1)  # Valores ajustados
 
-# Graficar predicciones
-# Asegurarse de que los valores predichos sean una serie temporal con el mismo inicio y frecuencia
-predicted_values <- predict(ModExp1, length(BoxCox_test))
+# Graficar las predicciones del conjunto de prueba
+predicted_values <- predict(best_model$model, length(BoxCox_test))
 predicted_values <- ts(predicted_values, start = start(BoxCox_test), frequency = frequency(BoxCox_test))
-lines(predicted_values, col = 'orange')
 
-# Leyenda
-legend('topright', legend = c('Datos originales', 'Valores ajustados', 'Test'), 
-       col = c('gray21', 'red', 'orange'), lty = 1, bty = 'n', lwd = c(1, 2, 2))
+lines(predicted_values, col = 'orange', lwd = 1)  # Predicciones
 
 # --------------
 
