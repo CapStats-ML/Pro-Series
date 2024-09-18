@@ -1,0 +1,191 @@
+---
+title: "DETECCIÓN DE NO LINEALIDAD EN SERIES DE TIEMPO"
+subtitle: "Quantilograma, Cross-Quantilograma y Correlacion entre distancias en Series de tiempo"
+author: 
+  - name: Michel Mendivenson Barragan Zabala 
+    url: https://github.com/Mendivenson
+    affiliation: Universidad Nacional de Colombia 
+    email: mbarraganz@unal.edu.co
+    role: Autor
+  - name: Cesar Augusto Prieto Sarmiento
+    url: https://github.com/CapStats-ML 
+    affiliation: Universidad Nacional de Colombia
+    email: ceprieto@unal.edu.co
+    role: Autor
+output: 
+  html_document:
+        toc: true
+        toc_depth: 2
+        theme: cosmo
+        code_folding: hide
+        highlight: tango
+        code_download: true
+papersize: letter
+linestretch: 1.5 
+fontsize: 12pt
+geometry:
+  - top=3cm  
+  - left=2.5cm
+mainfont: Arial 
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,         # Mostrar el código en el documento
+  warning = FALSE,     # Ocultar warnings
+  message = FALSE,     # Ocultar mensajes
+  fig.width = 10,       # Ancho de las figuras
+  fig.height = 7,      # Alto de las figuras
+  fig.align = 'center' # Alinear las figuras en el centro
+)
+```
+
+# 1. Introducción
+
+## Objetivo de la Exposición
+
+El principal objetivo de esta presentación es profundizar en dos herramientas estadísticas avanzadas para la detección de no linealidad en series de tiempo: el Quantilogram y el Cross-Quantilogram. A través de estos métodos, se explora cómo detectar dependencia no lineal entre valores de una serie de tiempo en diferentes cuantiles y cómo evaluar las relaciones entre cuantiles de dos series de tiempo distintas. En este sentido, se abordará no solo el concepto detrás de estas técnicas, sino también sus aplicaciones prácticas y relevancia en contextos como las finanzas y la economía.
+
+La exposición también busca mostrar de forma práctica cómo estas herramientas permiten identificar patrones de dependencia que no pueden ser detectados mediante técnicas lineales convencionales como la autocorrelación o los correlogramas. A lo largo de la presentación, se utilizarán ejemplos reales que ayuden a ilustrar los conceptos y la utilidad de estas técnicas.
+
+## Importancia de la No Linealidad en Series de Tiempo: 
+
+En muchos casos, las relaciones entre las variables que conforman una serie temporal no son estrictamente lineales. Esto implica que los métodos tradicionales, como la autocorrelación lineal o los modelos ARIMA, pueden no ser adecuados para capturar toda la estructura subyacente de los datos. La no linealidad en una serie de tiempo se refiere a situaciones en las que la relación entre los valores pasados y futuros de la serie no sigue una proporción constante, sino que varía dependiendo de la magnitud de los datos o de su comportamiento en extremos.
+
+Detectar y analizar no linealidades en series de tiempo es crucial porque:
+
+- **Fenómenos reales son inherentemente no lineales:** Muchos sistemas en la naturaleza, la economía y las finanzas muestran comportamientos no lineales. Por ejemplo, la volatilidad de los mercados financieros tiende a ser mayor en períodos de crisis, lo que sugiere una relación asimétrica entre los eventos de mercado y sus efectos.
+- **Prevención de fallas en modelos lineales:** Si no se tiene en cuenta la no linealidad, los modelos basados únicamente en relaciones lineales pueden subestimar o sobreestimar el riesgo, lo que lleva a predicciones inexactas o a la toma de decisiones erróneas.
+- **Comportamientos extremos:** Las series temporales pueden mostrar dependencia en las colas de la distribución, es decir, en los eventos más extremos. Este tipo de relación no es capturada por las técnicas lineales tradicionales. Los Quantilogramas permiten detectar estas dependencias extremas, algo que resulta crucial para el análisis del riesgo y la prevención de eventos catastróficos.
+
+En resumen, las herramientas de detección de no linealidad, como el Quantilogram y el Cross-Quantilogram, son esenciales para mejorar la comprensión de la estructura de los datos en contextos donde los modelos lineales convencionales son insuficientes.
+
+## Conceptos Básicos
+
+**¿Qué es la no linealidad en series de tiempo?**
+
+La no linealidad en una serie de tiempo se refiere a cualquier relación en la que los valores futuros no dependen de una manera proporcional y constante de los valores pasados. Mientras que en los modelos lineales se asume que los cambios en los valores futuros son siempre proporcionales a los cambios en los valores pasados (independientemente de su magnitud), en los modelos no lineales, esta relación varía. La no linealidad puede manifestarse de diferentes formas, como:
+
+- **Relaciones no proporcionales:** El impacto de los valores pasados en los futuros puede depender de la magnitud de los valores previos. Por ejemplo, grandes aumentos en una variable podrían tener un impacto más significativo que pequeños cambios.
+- **Asimetría:** La relación entre los valores pasados y futuros puede ser diferente dependiendo de si los valores están en el extremo superior o inferior de la distribución. En un mercado financiero, por ejemplo, una caída abrupta de precios puede tener un impacto más fuerte que un aumento equivalente.
+- **Efectos de cola:** Los eventos extremos (ya sea muy altos o muy bajos) pueden estar correlacionados, mientras que los valores promedio no muestran ninguna dependencia aparente. Esto significa que la dependencia solo se manifiesta en las colas de la distribución de la serie.
+
+La detección de no linealidad es crucial en muchas áreas, especialmente en finanzas, donde los eventos extremos como caídas de mercado o picos de volatilidad pueden tener un impacto significativo. Las técnicas como el Quantilogram y el Cross-Quantilogram permiten capturar estas dependencias no lineales al analizar cómo los valores extremos de una serie están correlacionados en diferentes momentos del tiempo o entre diferentes series.
+
+
+# 2. Quantilogram
+
+El **Quantilograma** es una herramienta estadística que mide la dependencia cuantílica entre los cuantiles de una serie de tiempo y sus rezagos. En lugar de medir la autocorrelación general entre los valores de una serie, el Quantilogram se enfoca en la dependencia no lineal presente en los extremos de la distribución (es decir, en los cuantiles superiores e inferiores). Esto lo hace especialmente útil en situaciones donde los eventos extremos, como los picos y caídas drásticas, juegan un papel importante, como en las series financieras y económicas.
+
+Matemáticamente, el Quantilogram mide la correlación entre los indicadores de si los valores de una serie están por debajo (o por encima) de un determinado cuantil y sus rezagos. Esto nos ayuda a capturar la dependencia en eventos extremos, que podría no ser evidente con medidas tradicionales de autocorrelación lineal.
+
+## Construcción del Quantilogram
+
+La construcción del Quantilogram implica varios pasos clave. A continuación se detalla el proceso con sus correspondientes fórmulas.
+
+  - **Definir los Cuantiles**: El primer paso para construir un Quantilogram es seleccionar los cuantiles que se quieren analizar. Por ejemplo, en una serie financiera, podría interesar conocer la dependencia en los extremos (como el $10\%$ o el $90\%$) que representan eventos de caída o subidas extremas. Un cuantil $\mathbf{q}_{\tau}$ de una serie de tiempo $\{ \mathbf{X}_{t} \}$ se define como:
+  
+  $$\mathbf{q}_{\tau} = \inf\{x : F_{X}(x) \geq \tau\}$$  
+
+Donde $F_{X}(x)$ es la función de distribución acumulativa de $\{ \mathbf{X}_{t} \}$ y $\tau \in \left( 0, 1 \right)$ es el nivel del cuantil que estamos interesados en estudiar.
+
+  - **Indicador de Cuantil**: A continuación, para cada observacion de la serie de tiempo $\{ \mathbf{X}_{t} \}$, se crea un **indicador binario** que toma el valor de 1 si el valor está por debajo (o por encima, según el cuantil de interés) del cuantil $\mathbf{q}_{\tau}$ y 0 en caso contrario. Este indicador se define como:
+  
+  $$\mathbf{I}_{\tau}\left( X_t\right) = 1\left( X_t \leq q_{\tau} \right)$$
+Aquí, $1\left( X_t \leq q_{\tau} \right)$ es la **función indicadora** que toma el valor 1 si $X_t$ es menor o igual que $q_{\tau}$ y 0 en caso contrario. Este paso permite identificar cuándo los valores de la serie cruzan el umbral definido por el cuantil.
+
+- **Autocorrelación Cuantílica**: El siguiente paso es calcular la **autocorrelación** de los valores indicados de la serie a diferentes rezagos. La autocorrelación cuantílica $\rho_{\tau}$ a un rezago $k$ se define como la correlacion entre los indicadores $I_{\tau}(X_t)$ y $I_{\tau}(X_{t-k})$:
+
+$$\rho_{\tau}(k) = \frac{E\left[ \left( I_{\tau}(X_t) - \hat{q}_{\tau} \right) \left( I_{\tau}(X_{t- k}) - \hat{q}_{\tau} \right) \right]}{\hat{\sigma}_{\tau}^2}$$
+donde: 
+
+- $\hat{q}_{\tau}$ es la media empírica de $I_{\tau}(X_t)$
+- $\hat{\sigma}_{\tau}^2$ es la varianza empírica de $I_{\tau}(X_t)$
+
+Esta autocorrelación cuantílica mide si los valores extremos (según el cuantil seleccionado) tienen correlación con los valores extremos en periodos pasados. Por ejemplo, podríamos investigar si los valores extremadamente altos de una serie (en el $90\%$ cuantil) están correlacionados con valores extremadamente altos en rezagos de 1, 2, o más periodos.
+
+- **Quantilograma**:  Finalmente, el Quantilograma para un conjunto de rezgos $k = 1, 2, ..., K$ es simplemente la grafica de $\rho_{\tau}(k)$ contra $k$. Esto permite visualizar si existe dependencia no lineal en los cuantiles seleccionados. Además, el Quantilograma también puede incluir intervalos de confianza para cada rezago , con el fin de determinar si la autocorrelación cuantílica es significativamente diferente de cero en cada rezago: 
+
+$$\hat{\rho}_{\tau}(k) \pm z_{1-\frac{\alpha}{2}} \cdot \frac{\hat{\sigma}(\hat{\rho}_\tau^{}(k))}{\sqrt{n}}$$
+
+Donde $\hat{\rho}_{\tau}(k)$ es la autocorrelación cuantílica en el rezago $k$, $\hat{\sigma}$ es la desviación estándar estimada de la autocorrelación cuantílica, $n$ es el tamaño de la muestra y $z_{1-\frac{\alpha}{2}}$ es el cuantil de la distribucion normal estandar al nivel de confianza $1 - \alpha$.
+
+## Aplicaciones Practicas del Quantilogram
+
+- **Finanzas**: Los mercados financieros suelen exhibir comportamientos extremos, como grandes caídas o subidas abruptas. El Quantilogram permite detectar si estos eventos extremos tienen alguna dependencia temporal. Por ejemplo, se puede evaluar si las caídas extremas en los precios de las acciones están correlacionadas con eventos pasados similares, lo cual es crucial para la gestión de riesgos.
+
+- **Análisis de Series Meteorológicas**: Las series temporales relacionadas con fenómenos naturales extremos, como temperaturas extremas o precipitaciones, pueden ser analizadas usando Quantilogramas para detectar dependencias en los eventos de clima severo.
+
+## Ejemplo práctico:
+
+
+# 3. Cross-Quantilogram
+
+El **Cross-Quantilogram** es una extensión del Quantilogram que mide la **dependencia cuantílica cruzada** entre dos series de tiempo en diferentes cuantiles y rezagos. A diferencia del Quantilogram, que estudia la autocorrelación en una sola serie, el Cross-Quantilogram analiza cómo los valores extremos (en diferentes cuantiles) de una serie están correlacionados con los valores extremos de otra serie, permitiendo detectar **relaciones no lineales** entre ambas.
+
+## Construcción del Cross-Quantilogram
+
+- **Definir los Cuantiles de Interés para Ambas Series**
+
+Supongamos que tenemos dos series de tiempo,  $\{ X_t \}$ y $\{ Y_t \}$. Definimos los cuantiles  $q_\tau^X$ y  $q_\tau^Y$ para cada nivel $\tau$ como:
+
+$$
+    q_\tau^X = \inf \left\{ x : F_X(x) \geq \tau \right\} \\
+    q_\tau^Y = \inf \left\{ y : F_Y(y) \geq \tau \right\} \\
+$$
+    
+donde $F_X(x)$ y  $F_Y(y)$ son las funciones de distribución acumulativas de  $X_t$ y $Y_t$.
+
+- **Indicador de Cuantil para Ambas Series**
+
+Definimos los indicadores binarios para los cuantiles de cada serie:
+
+$$
+I_\tau^X(X_t) = \mathbb{1}(X_t \leq q_\tau^X)\\
+I_\tau^Y(Y_t) = \mathbb{1}(Y_t \leq q_\tau^Y)\\
+$$
+
+donde  $\mathbb{1}(\cdot)$ es la función indicadora.
+
+- **Correlación Cruzada Cuantílica**
+
+La correlación cruzada cuantílica $\rho_\tau(k)$ entre las series $X_t$ y $Y_t$ a un rezago $k$ se calcula de la siguiente manera:
+
+$$
+\rho_\tau^{XY}(k) = \frac{\mathbb{E} \left[ \left( I_\tau^X(X_t) - \hat{q}_\tau^X \right) \left( I_\tau^Y(Y_{t-k}) - \hat{q}_\tau^Y \right) \right]}{\hat{\sigma}_\tau^X \hat{\sigma}_\tau^Y}
+$$
+
+
+Donde:
+
+- $\hat{q}_\tau^X$ y $\hat{q}_\tau^Y$ son las medias empíricas de $I_\tau^X(X_t)$ e $I_\tau^Y(Y_t)$
+    
+- $\hat{\sigma}_\tau^X$ y $\hat{\sigma}_\tau^Y$ son las desviaciones estándar empíricas de los indicadores.
+
+- **Cross-Quantilogram**
+
+El Cross-Quantilogram se representa gráficamente trazando $\rho_\tau^{XY}(k)$ contra $k$ para diferentes rezagos. Esta gráfica muestra la dependencia cuantílica cruzada. Para determinar si las correlaciones son estadísticamente significativas, se pueden calcular intervalos de confianza:
+
+$$
+\hat{\rho}_\tau^{XY}(k) \pm z_{1-\alpha/2} \cdot \frac{\hat{\sigma}(\hat{\rho}_\tau^{XY}(k))}{\sqrt{n}}
+$$
+
+Donde:
+
+- $z_{1-\alpha/2}$ es el valor crítico de la distribución normal estándar.
+- $\hat{\sigma}(\hat{\rho}_\tau^{XY}(k))$ es la desviación estándar del estimador $\hat{\rho}_\tau^{XY}(k)$.
+- $n$ es el tamaño de la muestra.
+
+Este intervalo de confianza te permite evaluar si las dependencias cuantílicas cruzadas son significativamente diferentes de cero.
+
+## Aplicaciones practicas del Cross-Quantilogram
+
+- **Ciencias Ambientales**: Detectar dependencias extremas entre variables climatológicas, como temperaturas y precipitaciones extremas.
+
+## Ejemplo práctico:
+
+
+# 4. Correlación entre distancias en Series de tiempo
+
+
