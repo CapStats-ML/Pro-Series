@@ -17,7 +17,7 @@ output:
         toc: true
         toc_depth: 2
         theme: cosmo
-        code_folding: hide
+        code_folding: show
         highlight: tango
         code_download: true
 papersize: letter
@@ -41,151 +41,523 @@ knitr::opts_chunk$set(
 )
 ```
 
-# 1. Introducción
+# 1. **Introducción**
 
-## Objetivo de la Exposición
+## **Objetivo de la Exposición**
 
 El principal objetivo de esta presentación es profundizar en dos herramientas estadísticas avanzadas para la detección de no linealidad en series de tiempo: el Quantilogram y el Cross-Quantilogram. A través de estos métodos, se explora cómo detectar dependencia no lineal entre valores de una serie de tiempo en diferentes cuantiles y cómo evaluar las relaciones entre cuantiles de dos series de tiempo distintas. En este sentido, se abordará no solo el concepto detrás de estas técnicas, sino también sus aplicaciones prácticas y relevancia en contextos como las finanzas y la economía.
 
 La exposición también busca mostrar de forma práctica cómo estas herramientas permiten identificar patrones de dependencia que no pueden ser detectados mediante técnicas lineales convencionales como la autocorrelación o los correlogramas. A lo largo de la presentación, se utilizarán ejemplos reales que ayuden a ilustrar los conceptos y la utilidad de estas técnicas.
 
-## Importancia de la No Linealidad en Series de Tiempo: 
+## **Importancia de la No Linealidad en Series de Tiempo:**
 
 En muchos casos, las relaciones entre las variables que conforman una serie temporal no son estrictamente lineales. Esto implica que los métodos tradicionales, como la autocorrelación lineal o los modelos ARIMA, pueden no ser adecuados para capturar toda la estructura subyacente de los datos. La no linealidad en una serie de tiempo se refiere a situaciones en las que la relación entre los valores pasados y futuros de la serie no sigue una proporción constante, sino que varía dependiendo de la magnitud de los datos o de su comportamiento en extremos.
 
 Detectar y analizar no linealidades en series de tiempo es crucial porque:
 
-- **Fenómenos reales son inherentemente no lineales:** Muchos sistemas en la naturaleza, la economía y las finanzas muestran comportamientos no lineales. Por ejemplo, la volatilidad de los mercados financieros tiende a ser mayor en períodos de crisis, lo que sugiere una relación asimétrica entre los eventos de mercado y sus efectos.
-- **Prevención de fallas en modelos lineales:** Si no se tiene en cuenta la no linealidad, los modelos basados únicamente en relaciones lineales pueden subestimar o sobreestimar el riesgo, lo que lleva a predicciones inexactas o a la toma de decisiones erróneas.
-- **Comportamientos extremos:** Las series temporales pueden mostrar dependencia en las colas de la distribución, es decir, en los eventos más extremos. Este tipo de relación no es capturada por las técnicas lineales tradicionales. Los Quantilogramas permiten detectar estas dependencias extremas, algo que resulta crucial para el análisis del riesgo y la prevención de eventos catastróficos.
+-   **Fenómenos reales son inherentemente no lineales:** Muchos sistemas en la naturaleza, la economía y las finanzas muestran comportamientos no lineales. Por ejemplo, la volatilidad de los mercados financieros tiende a ser mayor en períodos de crisis, lo que sugiere una relación asimétrica entre los eventos de mercado y sus efectos.
+-   **Prevención de fallas en modelos lineales:** Si no se tiene en cuenta la no linealidad, los modelos basados únicamente en relaciones lineales pueden subestimar o sobreestimar el riesgo, lo que lleva a predicciones inexactas o a la toma de decisiones erróneas.
+-   **Comportamientos extremos:** Las series temporales pueden mostrar dependencia en las colas de la distribución, es decir, en los eventos más extremos. Este tipo de relación no es capturada por las técnicas lineales tradicionales. Los Quantilogramas permiten detectar estas dependencias extremas, algo que resulta crucial para el análisis del riesgo y la prevención de eventos catastróficos.
 
 En resumen, las herramientas de detección de no linealidad, como el Quantilogram y el Cross-Quantilogram, son esenciales para mejorar la comprensión de la estructura de los datos en contextos donde los modelos lineales convencionales son insuficientes.
 
-## Conceptos Básicos
+## **Conceptos Básicos**
 
 **¿Qué es la no linealidad en series de tiempo?**
 
 La no linealidad en una serie de tiempo se refiere a cualquier relación en la que los valores futuros no dependen de una manera proporcional y constante de los valores pasados. Mientras que en los modelos lineales se asume que los cambios en los valores futuros son siempre proporcionales a los cambios en los valores pasados (independientemente de su magnitud), en los modelos no lineales, esta relación varía. La no linealidad puede manifestarse de diferentes formas, como:
 
-- **Relaciones no proporcionales:** El impacto de los valores pasados en los futuros puede depender de la magnitud de los valores previos. Por ejemplo, grandes aumentos en una variable podrían tener un impacto más significativo que pequeños cambios.
-- **Asimetría:** La relación entre los valores pasados y futuros puede ser diferente dependiendo de si los valores están en el extremo superior o inferior de la distribución. En un mercado financiero, por ejemplo, una caída abrupta de precios puede tener un impacto más fuerte que un aumento equivalente.
-- **Efectos de cola:** Los eventos extremos (ya sea muy altos o muy bajos) pueden estar correlacionados, mientras que los valores promedio no muestran ninguna dependencia aparente. Esto significa que la dependencia solo se manifiesta en las colas de la distribución de la serie.
+-   **Relaciones no proporcionales:** El impacto de los valores pasados en los futuros puede depender de la magnitud de los valores previos. Por ejemplo, grandes aumentos en una variable podrían tener un impacto más significativo que pequeños cambios.
+-   **Asimetría:** La relación entre los valores pasados y futuros puede ser diferente dependiendo de si los valores están en el extremo superior o inferior de la distribución. En un mercado financiero, por ejemplo, una caída abrupta de precios puede tener un impacto más fuerte que un aumento equivalente.
+-   **Efectos de cola:** Los eventos extremos (ya sea muy altos o muy bajos) pueden estar correlacionados, mientras que los valores promedio no muestran ninguna dependencia aparente. Esto significa que la dependencia solo se manifiesta en las colas de la distribución de la serie.
 
 La detección de no linealidad es crucial en muchas áreas, especialmente en finanzas, donde los eventos extremos como caídas de mercado o picos de volatilidad pueden tener un impacto significativo. Las técnicas como el Quantilogram y el Cross-Quantilogram permiten capturar estas dependencias no lineales al analizar cómo los valores extremos de una serie están correlacionados en diferentes momentos del tiempo o entre diferentes series.
 
+# 2. **Quantilogram**
 
-# 2. Quantilogram
+El **Quantilograma** es una herramienta que se utiliza para estudiar la **dependencia cuantílica** en series de tiempo. A diferencia de los métodos tradicionales que se centran en la correlación lineal entre los valores de una serie, el Quantilograma se enfoca en analizar cómo se relacionan los cuantiles (es decir, los percentiles) de una serie en diferentes momentos en el tiempo. Esto es particularmente útil cuando se busca estudiar la dependencia no lineal, especialmente en eventos extremos como grandes fluctuaciones de precios en mercados financieros, riesgos en seguros, o condiciones meteorológicas extremas.
 
-El **Quantilograma** es una herramienta estadística que mide la dependencia cuantílica entre los cuantiles de una serie de tiempo y sus rezagos. En lugar de medir la autocorrelación general entre los valores de una serie, el Quantilogram se enfoca en la dependencia no lineal presente en los extremos de la distribución (es decir, en los cuantiles superiores e inferiores). Esto lo hace especialmente útil en situaciones donde los eventos extremos, como los picos y caídas drásticas, juegan un papel importante, como en las series financieras y económicas.
+## **Dependencia Cuantílica y Motivación**
 
-Matemáticamente, el Quantilogram mide la correlación entre los indicadores de si los valores de una serie están por debajo (o por encima) de un determinado cuantil y sus rezagos. Esto nos ayuda a capturar la dependencia en eventos extremos, que podría no ser evidente con medidas tradicionales de autocorrelación lineal.
+La autocorrelación tradicional estudia cómo los valores de una serie en un punto del tiempo están relacionados con los valores en rezagos anteriores. Sin embargo, este enfoque supone una relación lineal y puede pasar por alto las dinámicas no lineales, especialmente en los extremos de la distribución.
 
-## Construcción del Quantilogram
+En cambio, el **Quantilograma** explora estas dinámicas al enfocarse en cómo los cuantiles en un punto del tiempo están correlacionados con los cuantiles en puntos anteriores. Esto es relevante en una serie de aplicaciones, como:
 
-La construcción del Quantilogram implica varios pasos clave. A continuación se detalla el proceso con sus correspondientes fórmulas.
+-   **Finanzas**: detectar dependencias en eventos extremos como grandes caídas o aumentos en los precios de activos.
+-   **Riesgo**: entender la relación entre eventos extremos (p. ej., días de grandes pérdidas) que pueden afectar las decisiones de gestión de riesgos.
+-   **Climatología**: analizar la frecuencia de eventos extremos como olas de calor o frío, o lluvias torrenciales.
 
-  - **Definir los Cuantiles**: El primer paso para construir un Quantilogram es seleccionar los cuantiles que se quieren analizar. Por ejemplo, en una serie financiera, podría interesar conocer la dependencia en los extremos (como el $10\%$ o el $90\%$) que representan eventos de caída o subidas extremas. Un cuantil $\mathbf{q}_{\tau}$ de una serie de tiempo $\{ \mathbf{X}_{t} \}$ se define como:
-  
-  $$\mathbf{q}_{\tau} = \inf\{x : F_{X}(x) \geq \tau\}$$  
+## **Definición Matemática**
 
-Donde $F_{X}(x)$ es la función de distribución acumulativa de $\{ \mathbf{X}_{t} \}$ y $\tau \in \left( 0, 1 \right)$ es el nivel del cuantil que estamos interesados en estudiar.
+Supongamos que las variables aleatorias $y_1, y_2, \dots$ provienen de un proceso estacionario cuya distribución marginal tiene cuantiles $\mu_{\alpha}$ para $\alpha \in (0,1)$, donde $\alpha$ representa un nivel de significancia, o cuantil, de interés.
 
-  - **Indicador de Cuantil**: A continuación, para cada observacion de la serie de tiempo $\{ \mathbf{X}_{t} \}$, se crea un **indicador binario** que toma el valor de 1 si el valor está por debajo (o por encima, según el cuantil de interés) del cuantil $\mathbf{q}_{\tau}$ y 0 en caso contrario. Este indicador se define como:
-  
-  $$\mathbf{I}_{\tau}\left( X_t\right) = 1\left( X_t \leq q_{\tau} \right)$$
-Aquí, $1\left( X_t \leq q_{\tau} \right)$ es la **función indicadora** que toma el valor 1 si $X_t$ es menor o igual que $q_{\tau}$ y 0 en caso contrario. Este paso permite identificar cuándo los valores de la serie cruzan el umbral definido por el cuantil.
-
-- **Autocorrelación Cuantílica**: El siguiente paso es calcular la **autocorrelación** de los valores indicados de la serie a diferentes rezagos. La autocorrelación cuantílica $\rho_{\tau}$ a un rezago $k$ se define como la correlacion entre los indicadores $I_{\tau}(X_t)$ y $I_{\tau}(X_{t-k})$:
-
-$$\rho_{\tau}(k) = \frac{E\left[ \left( I_{\tau}(X_t) - \hat{q}_{\tau} \right) \left( I_{\tau}(X_{t- k}) - \hat{q}_{\tau} \right) \right]}{\hat{\sigma}_{\tau}^2}$$
-donde: 
-
-- $\hat{q}_{\tau}$ es la media empírica de $I_{\tau}(X_t)$
-- $\hat{\sigma}_{\tau}^2$ es la varianza empírica de $I_{\tau}(X_t)$
-
-Esta autocorrelación cuantílica mide si los valores extremos (según el cuantil seleccionado) tienen correlación con los valores extremos en periodos pasados. Por ejemplo, podríamos investigar si los valores extremadamente altos de una serie (en el $90\%$ cuantil) están correlacionados con valores extremadamente altos en rezagos de 1, 2, o más periodos.
-
-- **Quantilograma**:  Finalmente, el Quantilograma para un conjunto de rezgos $k = 1, 2, ..., K$ es simplemente la grafica de $\rho_{\tau}(k)$ contra $k$. Esto permite visualizar si existe dependencia no lineal en los cuantiles seleccionados. Además, el Quantilograma también puede incluir intervalos de confianza para cada rezago , con el fin de determinar si la autocorrelación cuantílica es significativamente diferente de cero en cada rezago: 
-
-$$\hat{\rho}_{\tau}(k) \pm z_{1-\frac{\alpha}{2}} \cdot \frac{\hat{\sigma}(\hat{\rho}_\tau^{}(k))}{\sqrt{n}}$$
-
-Donde $\hat{\rho}_{\tau}(k)$ es la autocorrelación cuantílica en el rezago $k$, $\hat{\sigma}$ es la desviación estándar estimada de la autocorrelación cuantílica, $n$ es el tamaño de la muestra y $z_{1-\frac{\alpha}{2}}$ es el cuantil de la distribucion normal estandar al nivel de confianza $1 - \alpha$.
-
-## Aplicaciones Practicas del Quantilogram
-
-- **Finanzas**: Los mercados financieros suelen exhibir comportamientos extremos, como grandes caídas o subidas abruptas. El Quantilogram permite detectar si estos eventos extremos tienen alguna dependencia temporal. Por ejemplo, se puede evaluar si las caídas extremas en los precios de las acciones están correlacionadas con eventos pasados similares, lo cual es crucial para la gestión de riesgos.
-
-- **Análisis de Series Meteorológicas**: Las series temporales relacionadas con fenómenos naturales extremos, como temperaturas extremas o precipitaciones, pueden ser analizadas usando Quantilogramas para detectar dependencias en los eventos de clima severo.
-
-## Ejemplo práctico:
-
-
-# 3. Cross-Quantilogram
-
-El **Cross-Quantilogram** es una extensión del Quantilogram que mide la **dependencia cuantílica cruzada** entre dos series de tiempo en diferentes cuantiles y rezagos. A diferencia del Quantilogram, que estudia la autocorrelación en una sola serie, el Cross-Quantilogram analiza cómo los valores extremos (en diferentes cuantiles) de una serie están correlacionados con los valores extremos de otra serie, permitiendo detectar **relaciones no lineales** entre ambas.
-
-## Construcción del Cross-Quantilogram
-
-- **Definir los Cuantiles de Interés para Ambas Series**
-
-Supongamos que tenemos dos series de tiempo,  $\{ X_t \}$ y $\{ Y_t \}$. Definimos los cuantiles  $q_\tau^X$ y  $q_\tau^Y$ para cada nivel $\tau$ como:
+El Quantilograma, que mide la dependencia cuantílica entre los valores de una serie en diferentes rezagos, se define como:
 
 $$
-    q_\tau^X = \inf \left\{ x : F_X(x) \geq \tau \right\} \\
-    q_\tau^Y = \inf \left\{ y : F_Y(y) \geq \tau \right\} \\
+\rho_{\alpha k } = \frac{E\left[ \psi_{\alpha} \left( y_t - \mu_{\alpha} \right) \psi_{\alpha} \left( y_{t+k} - \mu_{\alpha} \right) \right]}{E \left[ \psi_{\alpha}^2 (y_{t} - \mu_{\alpha}) \right]}, \quad k = 1, 2, 3, \dots
 $$
+
+Donde $\{y_t\}$ es la serie estacionaria, $\mu_{\alpha}$ es el cuantil muestral estimado, y $\psi_{\alpha}(x)$ es una función indicadora que toma el valor de 1 si $x \leq 0$, y -1 si $x > 0$.
+
+## **Interpretación**
+
+El Quantilograma puede interpretarse como una extensión de la autocorrelación tradicional al dominio de los cuantiles. En lugar de medir la relación lineal entre los valores pasados y presentes de la serie, el Quantilograma mide cómo los valores que caen en los extremos de la distribución (por debajo o por encima de ciertos cuantiles) en un punto del tiempo están correlacionados con los valores en rezagos futuros.
+
+El valor de $\rho_{\alpha k}$ refleja la fuerza de esta dependencia cuantílica. Valores cercanos a 1 o -1 indican una fuerte dependencia entre los valores en los rezagos para el cuantil $\alpha$, mientras que valores cercanos a 0 sugieren una independencia cuantílica.
+
+## **Estimación Empírica**
+
+Dado un conjunto de datos de la serie $\{y_t\}_{t=1}^{T}$, el Quantilograma se estima de manera empírica. El primer paso es estimar el cuantil $\mu_{\alpha}$ de la serie a partir de los datos, lo cual se hace resolviendo el siguiente problema de minimización:
+
+$$
+\widehat{\mu}_\alpha = \arg \min_{\mu \in \mathbb{R}} \sum_{t=1}^T \rho_\alpha\left(y_t - \mu\right)
+$$
+
+donde $\rho_\alpha(x) = x[\alpha - 1(x < 0)]$, lo que permite encontrar el cuantil $\mu_{\alpha}$ a partir de la serie de tiempo. Luego, la dependencia cuantílica empírica $\widehat{\rho}_{\alpha k}$ para un rezago $k$ se calcula como:
+
+$$
+\widehat{\rho}_{\alpha k} = \frac{\sum_{t=1}^{T-k} \psi_\alpha \left( y_t - \widehat{\mu}_\alpha \right) \psi_\alpha \left( y_{t+k} - \widehat{\mu}_\alpha \right)}{\sqrt{\sum_{t=1}^{T-k} \psi_\alpha^2 \left( y_t - \widehat{\mu}_\alpha \right)} \sqrt{\sum_{t=1}^{T-k} \psi_\alpha^2 \left( y_{t+k} - \widehat{\mu}_\alpha \right)}}, \quad k = 1, 2, \dots, T-1
+$$
+
+## **Cálculo del Quantilograma en R**
+
+*(Explicacion del Codigo propuesto en Articulo Fuente)*
+
+El código implementa el cálculo del **quantilograma**, una herramienta estadística que mide la dependencia cuantílica en una serie de tiempo. El quantilograma analiza cómo los valores cuantílicos de la serie están relacionados en diferentes rezagos, midiendo la autocorrelación en los cuantiles de la distribución.
+
+### 1. **Lectura de Datos y Definiciones Iniciales**
+
+```{r}
+y <- read.table("sp500d.txt"); # n X 1 
+y <- data.matrix(y)
+n <- nrow(y) ;
+nk <- 100 ;
+ll <-  seq(from=1,by=1,length.out=nk)/nk
+```
+
+-   Se lee la serie de tiempo de un archivo de texto `(sp500d.txt)` y se convierte en una matriz.
+-   `n` representa el número total de observaciones en la serie.
+-   `nk` define el número de rezagos a considerar en el análisis (en este caso, 100).
+-   `ll` es una secuencia de valores que genera una normalización en los rezagos (es decir, entre 0 y 1).
+
+### 2. **Definición de Cuantiles y Parámetros**
+
+```{r}
+talpha <- as.matrix(c(0.01, 0.05, 0.10,0.25,0.5,0.75,0.90,0.95,0.99))
+nalpha <- nrow(talpha)
+```
+
+-   `talpha` define los niveles de cuantiles que se investigarán, como el `1%`, `5%`, `10%`, `50%`, etc.
+-   `nalpha` es el número de cuantiles que se analizarán.
+
+### 3. **Matrices de Resultados**
+
+El código inicializa varias matrices para almacenar los resultados:
+
+-   `signum`: Almacenará los valores del quantilograma para cada rezago y cuantil.
+-   `psignum`: Almacenará los valores ajustados del quantilograma usando autocorrelación parcial.
+-   `Vk`: Factores que influyen en el cálculo del error estándar.
+-   `seu`: Errores estándar asociados a los valores del quantilograma.
+
+```{r}
+sign_sign <- mat.or.vec(n,1) 
+signum <- mat.or.vec(nk,nalpha) 
+psignum <- mat.or.vec(nk,nalpha) 
+Vk <- mat.or.vec(nalpha,1) 
+seu <- mat.or.vec(nalpha,1) 
+bp <- mat.or.vec(nk,nalpha) 
+```
+
+### 4. **Cálculo del Quantilograma**
+
+El cálculo del quantilograma se realiza para cada cuantil `alpha` (desde 0.01 hasta 0.99). Este proceso implica varios pasos:
+
+#### a) **Estimación de Cuantiles y Residuos**
+
+```{r}
+source("./Functions/quant.R")
+jalpha  <-  1
+alpha  <-  talpha[jalpha]
+muhat <- quant(y, alpha)
+epshat <- y - muhat * as.matrix(rep(1, n))
+```
+
+Para cada nivel de cuantil, se estima el cuantil muestral `muhat` usando la función `quant`. Los errores residuales `(epshat)` se calculan como la diferencia entre los valores observados y y el cuantil estimado `muhat`.
+
+#### b) **Chequeo de la Dependencia Cuantílica**
+
+```{r}
+check <- (epshat >0) - (epshat <0) -(1-2*alpha)*as.matrix(rep(1,n))
+```
+
+La variable `check` representa una transformación que estandariza los errores residuales para reflejar la dependencia cuantílica. Esto se basa en la función indicadora $\psi_{\alpha}(x)$, que toma el valor de 1 si el error es positivo y -1 si es negativo, ajustado por el nivel de cuantil $\alpha$.
+
+#### c) **Cálculo del Quantilograma en los Rezagos**
+
+Para cada cuantil, se calcula el valor del quantilograma para los diferentes rezagos `k`.
+
+```{r}
+sign_sign <- check[1:(n-1)] * check[2:n]
+signum[1, jalpha] <- mean(sign_sign) / mean(check[1:(n-1)]^2)
+```
+
+Se calcula la autocorrelación cuantílica de primer orden usando los productos de los valores consecutivos de `check`. El valor resultante se almacena en la matriz signum.
+
+A medida que se incrementa el número de rezagos `k`, el proceso se repite para cada rezago:
+
+```{r}
+k <- 2
+
+while (k <= nk) {
+    sign_sign <- check[1:(n-k)] * check[(k+1):n]
+    signum[k, jalpha] <- mean(sign_sign) / mean(check[1:(n-k)]^2)
+    a <- solve(toeplitz(c(1, signum[1:(k-1), jalpha]))) %*% signum[1:k, jalpha]
+    psignum[k, jalpha] <- a[k]
+    k <- k + 1
+}
+```
+
+Aquí, se ajusta el quantilograma a través de una autocorrelación parcial, resolviendo un sistema lineal mediante la matriz de Toeplitz.
+
+#### d. **Cálculo de Errores Estándar**
+
+Finalmente, se calcula el error estándar asociado a cada valor del quantilograma, basado en el factor de corrección `Vk`:
+
+```{r}
+Vk[jalpha] <- 1 + (max(c(alpha, 1-alpha))^2) / (alpha * (1-alpha))
+seu[jalpha] <- sqrt(Vk[jalpha] / n)
+```
+
+El error estándar ajusta los valores del quantilograma para reflejar la varianza en las estimaciones de los cuantiles.
+
+### 5. **Resultados**
+
+El resultado final incluye el `quantilograma` para cada cuantil en función de los rezagos, almacenado en `signum` para los `valores del quantilograma`, y en `psignum` para los `valores ajustados`. También se calculan las sumas acumuladas `(bp y bpp)` para analizar la evolución del cuantilograma a través de los rezagos:
+
+```{r}
+bp <- apply((signum^2), 2, cumsum)
+bpp <- apply((psignum^2), 2, cumsum)
+sel <- sqrt(1/n)
+x <- ll * nk
+```
+
+*(Resultados despues de Correr Codigo Articulo Fuente)*
+
+```{r include=FALSE}
+# subfunctions
+source("./Functions/quant.R")
+source("./Functions/plotsignum.R")
+# /********************************
+#		load your data 
+# replace the load commands by your own
+#
+# nk is the number of lags to choose; default is 100
+#
+# *******************************/
+				
+y <- read.table("sp500d.txt"); # n X 1 
+y <- data.matrix(y)
+
+#/*****************************************/ 
+		
+n <- nrow(y) ;
+nk <- 100 ;
+ll  <-  seq(from=1,by=1,length.out=nk)/nk ;
+
+talpha  <-  as.matrix(c(0.01, 0.05, 0.10,0.25,0.5,0.75,0.90,0.95,0.99)) ;
+nalpha  <-  nrow(talpha) ;
+sign_sign <- mat.or.vec(n,1) ;
+signum <- mat.or.vec(nk,nalpha) ;
+psignum <- mat.or.vec(nk,nalpha) ;
+Vk <- mat.or.vec(nalpha,1) ;
+seu <- mat.or.vec(nalpha,1) ;
+bp <- mat.or.vec(nk,nalpha) ;
+
+jalpha  <-  1; 
+
+while (jalpha<=nalpha) { 
+	alpha  <-  talpha[jalpha] 
+	muhat <- quant(y,alpha) 
+	epshat <-  y - muhat*as.matrix(rep(1,n)) 
+	check <- (epshat >0) - (epshat <0) -(1-2*alpha)*as.matrix(rep(1,n))  
+	sign_sign <- as.matrix(mat.or.vec(n-1,1))
+	sign_sign <- check[1:(n-1)]*check[2:n] 
+	signum[1,jalpha]  <-  mean(sign_sign)/mean(check[1:(n-1)]^2) 
+	a <- as.matrix(mat.or.vec(nk,1)) ;
+	k <- 2 ;
+	while (k<=nk){
+		sign_sign <- as.matrix(mat.or.vec(n-k,1))
+		sign_sign <- check[1:(n-k)]*check[(k+1):n] 
+		signum[k,jalpha]  <-  mean(sign_sign)/mean(check[1:(n-k)]^2) 
+		a <- solve(toeplitz( c(1,signum[1:(k-1),jalpha])  ))%*%signum[1:k,jalpha]
+		psignum[k,jalpha] <- a[k] ;
+		k <- k+1 ;
+	} 
+	Vk[jalpha] <- 1 +  ( max(  c(alpha,1-alpha))^2 )/(alpha*(1-alpha))
+	seu[jalpha] <- sqrt(Vk[jalpha]/n) 
+	jalpha <- jalpha+1 
+}
+
+msign <- signum[,5] 
+
+bp <- apply((signum^2),2,cumsum) 
+bpp <- apply((psignum^2),2,cumsum) 
+
+sel <- sqrt(1/n) 
+x <- ll*nk
+```
+
+Resultados del Quantilograma:
+
+```{r echo=FALSE}
+par(mfrow=c(3,3),oma=c(1,1,1,1))
+
+plotsignum(x,signum[,1],-1.96*sel,1.96*sel,-1.96*seu[1],1.96*seu[1])
+title(main="alpha=0.01 ", ylab="Quantilogram")
+
+plotsignum(x,signum[,2],-1.96*sel,1.96*sel,-1.96*seu[2],1.96*seu[2])
+title(main="alpha=0.05")
+
+plotsignum(x,signum[,3],-1.96*sel,1.96*sel,-1.96*seu[3],1.96*seu[3])
+title(main="alpha=0.10")
+
+plotsignum(x,signum[,4],-1.96*sel,1.96*sel,-1.96*seu[4],1.96*seu[4])
+title(main="alpha=0.25",ylab="Quantilogram")
+
+plotsignum(x,signum[,5],-1.96*sel,1.96*sel,-1.96*seu[5],1.96*seu[5])
+title(main="alpha=0.50")
+
+plotsignum(x,signum[,6],-1.96*sel,1.96*sel,-1.96*seu[6],1.96*seu[6])
+title(main="alpha=0.75")
+
+plotsignum(x,signum[,7],-1.96*sel,1.96*sel,-1.96*seu[7],1.96*seu[7])
+title(main="alpha=0.75",ylab="Quantilogram",xlab = "Lag")
+
+plotsignum(x,signum[,8],-1.96*sel,1.96*sel,-1.96*seu[8],1.96*seu[8])
+title(main="alpha=0.95",xlab = "Lag")
+
+plotsignum(x,signum[,9],-1.96*sel,1.96*sel,-1.96*seu[9],1.96*seu[9])
+title(main="alpha=0.99",xlab = "Lag")
+```
+
+Quantilogramas básicos con bandas liberales
+
+```{r echo=FALSE}
+par(mfrow=c(3,3),oma=c(1,1,1,1))
+
+plotsignum(x,signum[,1],-1.96*sel,1.96*sel)
+title(main="alpha=0.01",ylab="Quantilogram")
+
+plotsignum(x,signum[,2],-1.96*sel,1.96*sel)
+title(main="alpha=0.05")
+
+plotsignum(x,signum[,3],-1.96*sel,1.96*sel)
+title(main="alpha=0.10")
+
+plotsignum(x,signum[,4],-1.96*sel,1.96*sel)
+title(main="alpha=0.25",ylab="Quantilogram")
+
+plotsignum(x,signum[,5],-1.96*sel,1.96*sel)
+title(main="alpha=0.50")
+
+plotsignum(x,signum[,6],-1.96*sel,1.96*sel)
+title(main="alpha=0.75")
+
+plotsignum(x,signum[,7],-1.96*sel,1.96*sel)
+title(main="alpha=0.90",ylab="Quantilogram",xlab = "Lag")
+
+
+plotsignum(x,signum[,8],-1.96*sel,1.96*sel)
+title(main="alpha=0.95",xlab = "Lag")
+
+plotsignum(x,signum[,9],-1.96*sel,1.96*sel)
+title(main="alpha=0.99",xlab = "Lag")
+```
+
+Box-Ljung
+
+```{r}
+t_t <- seq(from=1,by=1,length.out=nk) 
+c_c <- qchisq(0.95,t_t)
+```
+
+```{r echo=FALSE}
+par(mfrow=c(3,3),oma=c(1,1,1,1))	
+
+cu <- c_c*Vk[1] ;
+plotsignum(x,n*bp[,1],c_c,cu)
+title(main="alpha=0.01",ylab="Portmantau")
+
+cu <- c_c*Vk[2] 
+plotsignum(x,n*bp[,2],c_c,cu)
+title(main="alpha=0.05")
+
+cu <- c_c*Vk[3] ;
+plotsignum(x,n*bp[,3],c_c,cu)
+title(main="alpha=0.10")
+
+cu <- c_c*Vk[4] ;
+plotsignum(x,n*bp[,4],c_c,cu)
+title(main="alpha=0.25",ylab="Portmantau")
+
+cu <- c_c*Vk[5] ;
+plotsignum(x,n*bp[,5],c_c,cu)
+title(main="alpha=0.50")
+
+cu <- c_c*Vk[6] ;
+plotsignum(x,n*bp[,6],c_c,cu)
+title(main="alpha=0.75")
+
+cu <- c_c*Vk[7] ;
+plotsignum(x,n*bp[,7],c_c,cu)
+title(main="alpha=0.90",ylab="Portmantau",xlab = "Lag")
+
+cu <- c_c*Vk[8] ;
+plotsignum(x,n*bp[,8],c_c,cu)
+title(main="alpha=0.95",xlab = "Lag")
+
+cu <- c_c*Vk[9] ;
+plotsignum(x,n*bp[,9],c_c,cu)
+title(main="alpha=0.95",xlab = "Lag")
+
+```
+
+# 3. **Cross-Quantilogram**
+
+El **Cross-Quantilogram** es una extensión del Quantilogram que permite analizar la dependencia cuantílica entre dos series de tiempo diferentes. Mientras que el Quantilogram se centra en la dependencia cuantílica dentro de una única serie, el Cross-Quantilogram examina cómo los cuantiles de una serie están correlacionados con los cuantiles de otra serie en distintos momentos del tiempo.
+
+## **Definición Matemática**
+
+Sean $\{( \mathbf{y}_t, \mathbf{x}_t): t \in \mathbb{Z} \}$ dos series de tiempo estrictamente estacionarias, donde:
+
+- $\mathbf{y}_t = (y_{1t}, y_{2t})^{T} \in \mathbb{R}^2$
+- $\mathbf{x}_t = (x_{1t}, x_{2t})^{T} \in \mathbb{R}^{d_1} \times \mathbb{R}^{d_2}$
+- $x_{it} = \left[x_{it}^{(1)}, \ldots, x_{it}^{(d_i)}\right]^{T} \in \mathbb{R}^{d_i}$
+
+Para $i = 1,2$ y $d_i \in \mathbb{N}$, utilizamos $F_{y_i \mid x_i}( \cdot \mid x_{it})$ para denotar la función de distribución condicional de $y_{it}$ dado $x_{it}$. La función cuantil condicional se define como:
+
+$$
+q_{i,t}(\tau_i) = \inf \{v: F_{y_i \mid x_i}(v \mid x_{it}) \geq \tau_i \}
+$$
+
+Para $\tau_i \in (0,1)$, con $i=1,2$. El **Cross-Quantilogram** se define como la correlación cruzada de los **cuantiles-hit**:
+
+$$
+\rho_\tau(k) = \frac{E\left[\psi_{\tau_1}\left(y_{1t} - q_{1,t}(\tau_1)\right) \psi_{\tau_2}\left(y_{2, t-k} - q_{2,t-k}(\tau_2)\right)\right]}{\sqrt{E\left[\psi_{\tau_1}^2\left(y_{1t} - q_{1,t}(\tau_1)\right)\right]} \sqrt{E\left[\psi_{\tau_2}^2\left(y_{2, t-k} - q_{2,t-k}(\tau_2)\right)\right]}}
+$$
+
+donde $k = 0, \pm 1, \pm 2, \ldots$ y $\psi_a(u) \equiv 1[u < 0] - a$.
+
+## **Interpretación**
+
+El **Cross-Quantilogram** permite identificar relaciones de dependencia entre diferentes series de tiempo en varios niveles cuantílicos, proporcionando información valiosa sobre las relaciones de dependencia no lineales y asimétricas entre las series. Puede detectar patrones de dependencia entre eventos extremos, lo que es útil en campos como las finanzas.
+
+## **Estimación Empírica**
+
+Para construir una versión empírica del **Cross-Quantilogram**, se estiman las funciones cuantil condicionales a través de un modelo de regresión cuantil lineal propuesto por Koenker y Bassett (1978):
+
+$$
+\hat{\beta}_i(\tau_i) = \arg \min_{\beta_i \in \mathbb{R}^{d_i}} \sum_{t=1}^T \varrho_{\tau_i}(y_{it} - x_{it}^{T} \beta_i)
+$$
+
+donde $\varrho_a(u) \equiv u(a - 1[u < 0])$. Finalmente, el estimador empírico del **Cross-Quantilogram** está dado por:
+
+$$
+\hat{\rho}_{T,\tau}(k) = \frac{\sum_{t=k+1}^{T} \psi_{\tau_1}(y_{1t} - \hat{q}_{1,t}(\tau_1)) \psi_{\tau_2}(y_{2,t-k} - \hat{q}_{2,t-k}(\tau_2))}{\sqrt{\sum_{t=k+1}^{T} \psi_{\tau_1}^2(y_{1t} - \hat{q}_{1,t}(\tau_1))} \sqrt{\sum_{t=k+1}^{T} \psi_{\tau_2}^2(y_{2,t-k} - \hat{q}_{2,t-k}(\tau_2))}}
+$$
+
+## **Cálculo del Cross-Quantilogram en R**
+
+El código que sigue implementa el **Cross-Quantilograma**, una extensión del quantilograma que mide la dependencia cuantílica entre dos series de tiempo en diferentes niveles de cuantiles y rezagos. Esto permite identificar cómo los eventos extremos de una serie pueden estar correlacionados con otra serie en momentos futuros o pasados.
+
+### 1. **Definición de Parámetros Iniciales**
+
+El código comienza definiendo los parámetros necesarios para la estimación del Cross-Quantilograma.
+
+```{r}
+
+library(np)
+library(quantilogram)
+
+##====================
+## setup values
+##====================
+## the maximum lag orders 
+Kmax = 60  
+
+## quantile ranges
+vecA1  = as.matrix(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95))
+scaA2  = 0.10
+A1size = length(vecA1)
+
+## the number of repetition for the stationary bootstrap
+Bsize  = 10
+
+## the significance level 
+sigLev = 0.05
+
+## the trimming parameter for the self-normalization
+scaW   = 0.1
+## - critical values
+data(CV.SelfN.trim.0.10)
+vecCV.SN = as.matrix(CV.SelfN.trim.0.10$sig0.05)
+```
+
+- `Kmax`: El número máximo de rezagos a considerar (60 en este caso).
+- `vecA1`: Los niveles de cuantiles de la primera serie de tiempo (rango de 0.05 a 0.95).
+- `scaA2`: El nivel de cuantil para la segunda serie (fijado en 0.10).
+- `Bsize`: El número de repeticiones para el bootstrapping estacionario.
+- `sigLev`: El nivel de significancia (5%).
+- `scaW`: Parámetro de corte para la auto-normalización.
+- `vecCV.SN`: Valores críticos predefinidos para la auto-normalización.
+
+Tambien podemos incluir aquí la carga de los datos, el código carga los datos de dos series temporales: el retorno y la varianza del stock de un conjunto de datos predeterminado.
+
+```{r}
+##=========================
+## data 
+##=========================
+data(stock)  ## stock data
+
+DATA = cbind(stock$return, stock$variance)
+```
+
+Se combinan en una matriz `DATA` las dos series, `stock$return` y `stock$variance`, que representan el retorno y la varianza de las acciones, respectivamente.
+
+### 2. **Estimación del Cross-Quantilograma con Bootstrap Estacionario**
+
+El cálculo del Cross-Quantilograma se realiza mediante un bucle que recorre todos los niveles de cuantiles de la primera serie `(vecA1)` y los rezagos definidos en `Kmax`. En cada iteración se calcula el Cross-Quantilograma y los intervalos de confianza mediante bootstrap estacionario.
+
+```{r}
+##========================================================================
+## Cross-Q
+##========================================================================
+time0 = proc.time() ## time
+#==========================
+# Estimation and Bootstrap
+#==========================
+matCRQ  = matrix(0,Kmax, A1size)
+matCI.L = matrix(0,Kmax, A1size)
+matCI.R = matrix(0,Kmax, A1size)
+
+## Cross Q
+for (j in 1:A1size){
     
-donde $F_X(x)$ y  $F_Y(y)$ son las funciones de distribución acumulativas de  $X_t$ y $Y_t$.
+  vecA = matrix( c(vecA1[j], scaA2), 2,1)
 
-- **Indicador de Cuantil para Ambas Series**
+  for (k in 1:Kmax){
 
-Definimos los indicadores binarios para los cuantiles de cada serie:
-
-$$
-I_\tau^X(X_t) = \mathbb{1}(X_t \leq q_\tau^X)\\
-I_\tau^Y(Y_t) = \mathbb{1}(Y_t \leq q_\tau^Y)\\
-$$
-
-donde  $\mathbb{1}(\cdot)$ es la función indicadora.
-
-- **Correlación Cruzada Cuantílica**
-
-La correlación cruzada cuantílica $\rho_\tau(k)$ entre las series $X_t$ y $Y_t$ a un rezago $k$ se calcula de la siguiente manera:
-
-$$
-\rho_\tau^{XY}(k) = \frac{\mathbb{E} \left[ \left( I_\tau^X(X_t) - \hat{q}_\tau^X \right) \left( I_\tau^Y(Y_{t-k}) - \hat{q}_\tau^Y \right) \right]}{\hat{\sigma}_\tau^X \hat{\sigma}_\tau^Y}
-$$
+    RES          = CrossQ.StatBoot.OptAve(DATA, vecA, k, Bsize, sigLev)
+    matCI.L[k,j] = RES$vecCV[1]
+    matCI.R[k,j] = RES$vecCV[2]
+    matCRQ[k,j]  = RES$vCRQ
+  }
+}
+```
 
 
-Donde:
-
-- $\hat{q}_\tau^X$ y $\hat{q}_\tau^Y$ son las medias empíricas de $I_\tau^X(X_t)$ e $I_\tau^Y(Y_t)$
-    
-- $\hat{\sigma}_\tau^X$ y $\hat{\sigma}_\tau^Y$ son las desviaciones estándar empíricas de los indicadores.
-
-- **Cross-Quantilogram**
-
-El Cross-Quantilogram se representa gráficamente trazando $\rho_\tau^{XY}(k)$ contra $k$ para diferentes rezagos. Esta gráfica muestra la dependencia cuantílica cruzada. Para determinar si las correlaciones son estadísticamente significativas, se pueden calcular intervalos de confianza:
-
-$$
-\hat{\rho}_\tau^{XY}(k) \pm z_{1-\alpha/2} \cdot \frac{\hat{\sigma}(\hat{\rho}_\tau^{XY}(k))}{\sqrt{n}}
-$$
-
-Donde:
-
-- $z_{1-\alpha/2}$ es el valor crítico de la distribución normal estándar.
-- $\hat{\sigma}(\hat{\rho}_\tau^{XY}(k))$ es la desviación estándar del estimador $\hat{\rho}_\tau^{XY}(k)$.
-- $n$ es el tamaño de la muestra.
-
-Este intervalo de confianza te permite evaluar si las dependencias cuantílicas cruzadas son significativamente diferentes de cero.
-
-## Aplicaciones practicas del Cross-Quantilogram
-
-- **Ciencias Ambientales**: Detectar dependencias extremas entre variables climatológicas, como temperaturas y precipitaciones extremas.
-
-## Ejemplo práctico:
-
+- Se inicializan las matrices `matCRQ`, `matCI.L`, y `matCI.R` para almacenar los valores del Cross-Quantilograma y los intervalos de confianza.
+- Para cada cuantil de la primera serie, `vecA1[j]`, y el cuantil de la segunda serie, `scaA2`, se calcula el Cross-Quantilograma utilizando la función `CrossQ.StatBoot.OptAve`.
+- Los valores de los intervalos de confianza inferior y superior se almacenan en `matCI.L` y `matCI.R`, respectivamente, mientras que el valor del Cross-Quantilograma se guarda en `matCRQ`.
 
 # 4. Correlación entre distancias en Series de tiempo
-
-
