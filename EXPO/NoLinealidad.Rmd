@@ -560,4 +560,175 @@ for (j in 1:A1size){
 - Para cada cuantil de la primera serie, `vecA1[j]`, y el cuantil de la segunda serie, `scaA2`, se calcula el Cross-Quantilograma utilizando la función `CrossQ.StatBoot.OptAve`.
 - Los valores de los intervalos de confianza inferior y superior se almacenan en `matCI.L` y `matCI.R`, respectivamente, mientras que el valor del Cross-Quantilograma se guarda en `matCRQ`.
 
+
+### 3. **Auto-Normalización del Cross-Quantilograma**
+
+A continuación, el código implementa una corrección de auto-normalización para el Cross-Quantilograma, con el objetivo de ajustar los valores utilizando un factor de normalización que ajusta los resultados según el tamaño muestral y la varianza de las series.
+
+```{r}
+##=====================
+## Self-normalization
+##=====================
+matCRQ2   = matrix(0, Kmax, A1size)
+matCRQ.SN = matrix(0, Kmax, A1size)
+matCI95   = matrix(0, Kmax, A1size)
+
+for (j in 1:A1size) {
+
+    ## quantiles
+    vecA  = matrix(c(vecA1[j], scaA2), 2, 1)
+
+    ## cross-Q
+    for (k in 1:Kmax){
+
+      RES.CRQ        = CrossQ.SelfN(DATA, vecA, k, scaW)
+      matCRQ.SN[k,j] = RES.CRQ$vCRQ.SN
+      matCRQ2[k,j]   = RES.CRQ$vCRQ
+      
+      ## confidence interval for cross-quantilogram
+      matCI95[k,j] = sqrt(  vecCV.SN[1] * ( (RES.CRQ$vCRQ ^ 2) / RES.CRQ$vCRQ.SN ) )
+
+    }
+}
+```
+
+- Se inicializan las matrices `matCRQ2`, `matCRQ.SN`, y `matCI95` para almacenar los valores del Cross-Quantilograma normalizado y los intervalos de confianza ajustados.
+- Para cada combinación de cuantil y rezago, se aplica la función `CrossQ.SelfN`, que ajusta el valor del Cross-Quantilograma (`vCRQ.SN`) mediante auto-normalización.
+- Los intervalos de confianza se calculan usando el valor crítico de auto-normalización (`vecCV.SN`), ajustando los valores del Cross-Quantilograma normalizado.
+
+Resultados del CroosQuantilograma: 
+
+```{r include=FALSE}
+library(np)
+library(quantilogram)
+##====================
+## setup values
+##====================
+## the maximum lag orders 
+Kmax = 60  
+
+## quantile ranges
+vecA1  = as.matrix(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95))
+scaA2  = 0.10
+A1size = length(vecA1)
+
+
+## the number of repetition for the statioanry bootstrap
+Bsize  = 10
+
+## the significance level 
+sigLev = 0.05
+
+## the triming parameter for the self-normalization
+scaW   = 0.1
+## - critical values
+data(CV.SelfN.trim.0.10)
+vecCV.SN = as.matrix(CV.SelfN.trim.0.10$sig0.05)
+
+##=========================
+## data 
+##=========================
+data(stock)  ## stock data
+
+DATA = cbind(stock$return, stock$variance)
+
+##========================================================================
+## Cross-Q
+##========================================================================
+time0 = proc.time() ## time
+#==========================
+# Estimation and Bootstrap
+#==========================
+matCRQ  = matrix(0,Kmax, A1size)
+matCI.L = matrix(0,Kmax, A1size)
+matCI.R = matrix(0,Kmax, A1size)
+
+## Cross Q
+for (j in 1:A1size){
+    
+  vecA = matrix( c(vecA1[j], scaA2), 2,1)
+
+  for (k in 1:Kmax){
+
+    RES          = CrossQ.StatBoot.OptAve(DATA, vecA, k, Bsize, sigLev)
+    matCI.L[k,j] = RES$vecCV[1]
+    matCI.R[k,j] = RES$vecCV[2]
+    matCRQ[k,j]  = RES$vCRQ
+  }
+}
+
+
+##=====================
+## Slef-normalization
+##=====================
+matCRQ2   = matrix(0, Kmax, A1size)
+matCRQ.SN = matrix(0, Kmax, A1size)
+matCI95   = matrix(0, Kmax, A1size)
+
+for (j in 1:A1size) {
+
+    ## quantiles
+    vecA  = matrix(c(vecA1[j], scaA2), 2, 1)
+
+    ## corss-Q
+    for (k in 1:Kmax){
+
+      RES.CRQ        = CrossQ.SelfN(DATA, vecA, k, scaW)
+      matCRQ.SN[k,j] = RES.CRQ$vCRQ.SN
+      matCRQ2[k,j]   = RES.CRQ$vCRQ
+      
+      ## confidence interval for cross-quantilogram
+      matCI95[k,j] = sqrt(  vecCV.SN[1] * ( (RES.CRQ$vCRQ ^ 2) / RES.CRQ$vCRQ.SN ) )
+
+    }
+}
+
+```
+
+```{r echo=FALSE}
+vec.lag = as.matrix(seq(1,Kmax))
+
+par(mfrow = c(3, ceiling(A1size/3)))
+for (j in 1:A1size){
+
+    vecCRQ  = matCRQ[,j ,drop=FALSE]
+    vecCI.L = matCI.L[,j,drop=FALSE]
+    vecCI.R = matCI.R[,j,drop=FALSE]
+    
+    plot(vec.lag, vecCRQ, type = 'h',
+         xlab = 'Lag', ylab = 'Quantilogram',
+         ylim = c(-0.2,0.2),
+         main = bquote(alpha[1]==.(vecA1[j]) )   )
+    ## line for 0
+    abline(h = 0)
+
+    ## add lines for CI
+    lines(vec.lag, vecCI.L, lwd=1.5, lty=2 , col= "red") 
+    lines(vec.lag, vecCI.R, lwd=1.5, lty=2 , col= "red") 
+
+}
+```
+
+```{r}
+par(mfrow = c(3, ceiling(A1size/3)))
+for (j in 1:A1size){
+
+    vecCRQ = matCRQ2[,j ,drop=FALSE] ## you will obtain the same results with matCRQ.
+    vecCI  = matCI.L[,j ,drop=FALSE]
+    
+    plot(vec.lag, vecCRQ, type = 'h',
+         xlab = 'Lag', ylab = 'Quantilogram',
+         ylim = c(-0.2,0.2),
+         main = bquote(alpha[1]==.(vecA1[j]) )   )
+    ## line for 0
+    abline(h = 0)
+
+    ## add lines for CI
+    lines(vec.lag, (-vecCI), lwd=1.5, lty=2 , col= "red") 
+    lines(vec.lag,   vecCI , lwd=1.5, lty=2 , col= "red") 
+
+}
+```
+
+
 # 4. Correlación entre distancias en Series de tiempo
