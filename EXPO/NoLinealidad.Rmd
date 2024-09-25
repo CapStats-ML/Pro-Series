@@ -709,7 +709,7 @@ for (j in 1:A1size){
 }
 ```
 
-```{r}
+```{r echo=FALSE}
 par(mfrow = c(3, ceiling(A1size/3)))
 for (j in 1:A1size){
 

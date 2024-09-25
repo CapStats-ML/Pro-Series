@@ -1,0 +1,415 @@
+# Punto 2: Ajuste 2 modelos para la serie de tiempo indicada: un modelo de Redes Neuronales (multicapa o recurrentes) para resolver el problema de la predicción 2 pasos adelante, y un modelo *(S)ARIMA* (puede incluir una variable dummy o de Fourier) (**obligatorio**). 
+
+```{marginfigure}
+**Observación:** Para el modelo de redes neuronales, indicar las características o variables explicativas del modelo y cómo fueron seleccionadas. Adicionalmente, indique todo el procedimiento de identificación del modelo de la familia S(ARIMA). Debe modelar los *outliers* para el modelo SARIMA si alguno fue detectado. Tenga en cuenta que puede usar las variables de intervención obtenidas para el modelo SARIMA cuando modele los *outliers* en el modelo de redes.
+```
+
+En el caso de redes neuronales o redes neuronales recurrentes, se debe explorar (mediante *grid search*) capas ocultas (1 o 2), cada capa oculta con 8 o 32 nodos o neuronas, y con función de activación *tanh* o *ReLU* (el tamaño del lote debe ser igual a 10, el algoritmo de optimización que usted crea conveniente, al igual que la tasa de aprendizaje, y el número de *epochs* no debe ser menor a 50). No olviden usar el conjunto de validación para identificar los hiperparámetros de cada modelo.
+
+En caso de que el modelo no tenga hiperparámetros, unir el conjunto de entrenamiento y validación como un solo conjunto de entrenamiento.
+
+**Observación:** Para el modelo de redes neuronales, indicar las características o variables explicativas del modelo y cómo fueron seleccionadas. Adicionalmente, indique todo el procedimiento de identificación del modelo de la familia S(ARIMA). Debe modelar los *outliers* para el modelo SARIMA si alguno fue detectado. Tenga en cuenta que puede usar las variables de intervención obtenidas para el modelo SARIMA cuando modele los *outliers* en el modelo de redes.
+
+## MODELO DE REDES NEURONALES LSTM
+
+A continuacion, se describe el procedimiento llevado a cabo para ajustar un modelo de redes neuronales recurrentes (RNN) en este caso un modelo LSTM, con el objetivo de predecir la tasa de desempleo de mujeres en Colombia, empleando variables adicionales a los datos historicos obtenidos del profesor. Se ha diseñado el modelo para realizar predicciones a dos pasos adelante, incorporando técnicas de preprocesamiento y ajuste de hiperparámetros, el desarollo de este modelo fue realizado en un cuardeno de Jupyter Notebook, usando python y los paquetes que ahí se proporcionan.
+
+### ELECCION DE REZAGOS Y VARIABLES DE FOURIRES
+
+Se tuvo en cuenta principalmente la descomposicion STL de la serie presentada anteiormente para seleccionar 12 reazagos y 4 variables de fourier, que se consideraron importantes para el ajuste del modelo.
+
+Los rezagos seleccionados fueron los ultimos 12 dado que se observa una tendencia estacional de 12 meses en la serie de tiempo segun los visto en la descomposicion STL y ademas de esto el periodo obtenido fue de 12 meses, por lo que se considero que estos rezagos podrian ser importantes para el ajuste del modelo. Por otra parte, se seleccionaron 4 variables de fourier, dado que se observo que la serie de tiempo presentaba una tendencia estacional de 12 meses, se considero que 4 variables de fourier podrian ser suficientes para capturar esta tendencia. Estas variables de Fourier en terminos de Senos y Cosenos, para una periodicidad anual y mensual respectivamente, las cuales se muestran a continuacion:
+
+
+```{python Creaciond Variables de Fourier, eval=FALSE,  python.reticulate = FALSE}
+# Obtener el índice de la serie de tiempo como un objeto DatetimeIndex
+date_time_index = df1.index
+date_time_index = pd.Series(date_time_index)
+
+# Convertir cada valor de fecha y hora a un timestamp en segundos
+timestamp_s = date_time_index.apply(pd.Timestamp.timestamp)
+print(timestamp_s)
+
+# Crear el DataFrame con las variables de Fourier
+df2 = pd.DataFrame()
+day = 24*60*60  # segundos en un día
+year = 365.2425 * day  # segundos en un año (considerando años bisiestos)
+month = year / 12
+
+df2['TDMC'] = df1['TDMC'].values
+df2['Year sin'] = np.sin(timestamp_s * (2 * np.pi / year))
+df2['Year cos'] = np.cos(timestamp_s * (2 * np.pi / year))
+df2['Month sin'] = np.sin(timestamp_s * (2 * np.pi / month))
+df2['Month cos'] = np.cos(timestamp_s * (2 * np.pi / month))
+
+# Mostrar las primeras filas del DataFrame resultante
+print(df2.head())
+```
+
+
+![Series de Fourier Anual](FourierAnual.png)
+
+En la grafica anterior se puede observar como en las variables de Fourier tanto para el seno como para el coseno para el caso de una periodicidad anual es decir 12 tiempos si nos guiamos por el eje x de la figura obtenemos un ciclo completo, lo cual nos esta aportando informacion util sobre como se comporta la serie.
+
+![Series de Fourier Mensual](FourierMensual.png)
+
+Para el caso mensual, obtenemos resultados distintos a los anuales pero esto no quiere decir que estas caracteristicas no esten siendo informativas, se puede ver tanto para el Seno como para el Coseno, que existe una periodicidad en el comportamiento mensual de la serie. \
+\
+Dicho lo anterior, estas son las variables con las variables extra con las que nos proponemos a realizar la aplicacion y el ajuste del modelo de redes neuronales.
+
+Luego se tomaron lo rezagos de la serie de tiempo, para esto se utilizo la funcion de pandas `shift` para obtener los rezagos de la serie de tiempo, y a su vez tambien se hizo el ajuste para resolver el problema de la prediccion a 2 pasos adelante. A continuacion se muestra el codigo utilizado para obtener los rezagos de la serie de tiempo.
+
+
+```{python Eleccionde rezagos, eval=FALSE,  python.reticulate = FALSE}
+from pandas import DataFrame
+
+df4 = DataFrame()
+df4 = df2
+print(df4)
+
+# Crear los rezagos
+for lag in range(1, 12 + 1):
+    df4[f'TDMC_lag_{lag}'] = df4['TDMC'].shift(lag)
+
+# Desplazar la variable objetivo 2 pasos adelante
+df4['TDMC_2_steps_ahead'] = df4['TDMC'].shift(-2)
+
+# Eliminar filas con valores nulos (ocurren debido a los rezagos)
+df4.dropna(inplace=True)
+df4.head(5)
+
+# Separar las características y la variable objetivo
+X = df4.drop(columns=['TDMC', 'TDMC_2_steps_ahead'])
+y = df4['TDMC_2_steps_ahead']
+```
+
+### DIVISION DE LOS DATOS
+
+Para la division de los datos se utilizo la funcion `.loc` de pandas para seleccionar los datos de entrenamiento, validacion y prueba, se seleccionaro los datos tal cual se indicio en el documento de requerimientos del punto 2, es decir, de la forma en la que se seleccionarion los datos de entrenamiento van desde el mes donde esté el primer dato hasta diciembre de del año 2021, los datos de validación corresponden desde enero de 2022 hasta diciembre de 2022, mientras que los datos de prueba van desde enero de 2023 hasta abril de 2024. A continuacion se muestra el codigo utilizado para la division de los datos.
+
+```{python Div Conjuntos, eval=FALSE,  python.reticulate = FALSE}
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split
+
+# Normalizar las características
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Convertir X_scaled de vuelta a DataFrame para mantener el índice temporal
+X_scaled = pd.DataFrame(X_scaled, index=df4.index, columns=X.columns)
+
+# Dividir los datos según el rango temporal
+X_train = X_scaled.loc[:'2021-12']
+y_train = y.loc[:'2021-12']
+
+X_val = X_scaled.loc['2022-01':'2022-12']
+y_val = y.loc['2022-01':'2022-12']
+
+X_test = X_scaled.loc['2023-01':'2024-04']
+y_test = y.loc['2023-01':'2024-04']
+```
+
+### AJUSTE DE LA RED Y DEFINICION DE HIPERPARAMETROS
+
+Se realizó una búsqueda en cuadrícula (`Grid Search`) para optimizar los siguientes hiperparámetros:
+
+- Número de capas ocultas: `1` o `2`.
+- Número de neuronas por capa: `8` o `32`.
+- Función de activación: `tanh` o `ReLU`.
+- Tasa de aprendizaje: `0.01`.
+- Tamaño del lote: `10`.
+- Número de épocas: `50`.
+
+El proceso de ajuste fue llevado a cabo utilizando `Keras` y `scikit-learn` para estructurar el modelo y realizar la validación cruzada.
+
+```{python Ajust, eval=FALSE,  python.reticulate = FALSE}
+# Función para crear el modelo LSTM
+def create_model(layers=1, neurons=8, activation='relu', learning_rate=0.001):
+    model = Sequential()
+    
+    # Primera capa LSTM
+    model.add(LSTM(neurons, activation=activation, input_shape=(1, n_features)))
+    
+    # Segunda capa LSTM si es necesario
+    if layers == 2:
+        model.add(LSTM(neurons, activation=activation))
+    
+    # Capa de salida
+    model.add(Dense(1))  # Una neurona de salida
+    
+    # Compilar el modelo
+    optimizer = Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='mse')
+    
+    return model
+  
+model = KerasRegressor(model=create_model, epochs=50, batch_size=10, verbose=0)
+
+# Definimos los hiperparámetros que vamos a probar
+param_grid = {
+    'model__layers': [1, 2],
+    'model__neurons': [8, 32],
+    'model__activation': ['tanh', 'relu'],
+    'model__learning_rate': [0.001, 0.01],
+}
+
+grid = GridSearchCV(estimator=model, param_grid=param_grid, cv=3, scoring='neg_mean_squared_error')
+grid_result = grid.fit(X_train_reshaped, y_train)
+```
+
+### RESULTADOS DEL AJUSTE DE HIPERPARAMETROS
+
+Con lo anterior, obtuvimos el mejor modelo de redes neuronales LSTM con los siguientes hiperparametros:
+
+```{python Resultados, eval=FALSE,  python.reticulate = FALSE}
+Best parameters: {'model__activation': 'tanh', 'model__layers': 1, 'model__learning_rate': 0.01, 'model__neurons': 32}
+Best score: -8.418888179783044
+```
+
+Ahora, una manera grafica de obtener estos resultados es mediante la utilizacion de la libreria `matplotlib` para la visualizacion de los resultados obtenidos en el ajuste de hiperparametros, a continuacion se muestra el codigo utilizado para la visualizacion de los resultados.
+
+```{python Visualizacion, eval=FALSE,  python.reticulate = FALSE}
+
+# Realizar predicciones en cada conjunto
+train_predictions = best_model.predict(X_train_reshaped)
+val_predictions = best_model.predict(X_val_reshaped)
+test_predictions = best_model.predict(X_test_reshaped)
+
+PredT = np.concatenate([train_predictions, val_predictions, test_predictions])
+ObsT = np.concatenate([y_train, y_val, y_test])
+FechasT = np.concatenate([y_train.index, y_val.index, y_test.index])
+
+
+plt.figure(figsize=(14, 6))
+
+# Graficar los valores reales y predicciones del conjunto de entrenamiento
+plt.plot(FechasT, ObsT , label='Valores reales (Entrenamiento)', linestyle='-', color='blue')
+plt.plot(FechasT, PredT, label='Predicciones (Entrenamiento)', linestyle='-', color='red')
+
+split_date_val = y_val.index[0]
+plt.axvline(x=split_date_val, color='purple', linestyle='--')
+split_date_test = y_test.index[0]
+plt.axvline(x=split_date_test, color='green', linestyle='--')
+
+plt.title('Serie Real vs Predicciones Modelo LSTM', fontweight = 'bold', fontsize = 'large')
+plt.xlabel('Fecha', fontweight = 'medium', fontsize = 'medium')
+plt.ylabel('Tasa de Desempleo de Mujeres en Colombia', fontweight = 'medium', fontsize = 'medium')
+plt.grid(True)
+plt.tight_layout()
+plt.legend(["Valores reales", "Predicciones"], fontsize= 10)
+
+plt.savefig('Real_vs_Pred.png', format='png', dpi=300)  # Ajusta dpi para la calidad
+plt.show()
+
+```
+
+
+![Real vs Predicciones](Real_vs_Pred.png)
+
+```{python Real vs Predicciones, eval=FALSE,  python.reticulate = FALSE}
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Crear una figura para graficar todos los conjuntos
+plt.figure(figsize=(12, 8))
+
+# Graficar los valores reales y predicciones del conjunto de entrenamiento
+plt.subplot(3, 1, 1)
+plt.plot(y_train.index, y_train, label='Valores reales (Entrenamiento)', linestyle='-', color='blue')
+plt.plot(y_train.index, train_predictions, label='Predicciones (Entrenamiento)', linestyle='-', color='red')
+plt.title('ENTRENAMIENTO', fontweight = 'bold', fontsize = 'medium')
+plt.xlabel('Fecha', fontweight = 'medium', fontsize = 'medium')
+plt.ylabel('Tasa de Desempleo de\nMujeres en Colombia', fontweight = 'medium', fontsize = 'medium')
+plt.grid(True)
+plt.legend(["Valores reales", "Predicciones"], fontsize= 8)
+
+# Graficar los valores reales y predicciones del conjunto de validación
+plt.subplot(3, 1, 2)
+plt.plot(y_val.index, y_val, label='Valores reales (Validación)', linestyle='-', marker='*', color='blue')
+plt.plot(y_val.index, val_predictions, label='Predicciones (Validación)', linestyle='-', marker='*', color='red')
+plt.title('VALIDACIÓN', fontweight = 'bold', fontsize = 'medium')
+plt.xlabel('Fecha', fontweight = 'medium', fontsize = 'medium')
+plt.ylabel('Tasa de Desempleo de\nMujeres en Colombia', fontweight = 'medium', fontsize = 'medium')
+plt.grid(True)
+plt.legend(["Valores reales", "Predicciones"], fontsize= 8)
+
+# Graficar los valores reales y predicciones del conjunto de prueba
+plt.subplot(3, 1, 3)
+plt.plot(y_test.index, y_test, label='Valores reales (Prueba)', linestyle='-', marker='*', color='blue')
+plt.plot(y_test.index, test_predictions, label='Predicciones (Prueba)', linestyle='-', marker='*', color='red')
+plt.title('PRUEBA', fontweight = 'bold', fontsize = 'medium')
+plt.xlabel('Fecha', fontweight = 'medium', fontsize = 'medium')
+plt.ylabel('Tasa de Desempleo de\nMujeres en Colombia', fontweight = 'medium', fontsize = 'medium')
+plt.grid(True)
+plt.legend(["Valores reales", "Predicciones"], fontsize= 8)
+
+# Ajustar el layout y mostrar el gráfico
+plt.tight_layout()
+plt.savefig('Real_vs_Pred2.png', format='png', dpi=300)  # Ajusta dpi para la calidad
+plt.show()
+```
+
+
+![Real vs Predicciones](Real_vs_Pred2.png)
+
+
+## **Modelo SARIMA**
+
+### **Definición de p,q,P y Q para el modelo SARIMA**
+
+
+```{marginfigure}
+Como existen raíces unitarias. Efectúamos una diferencia ordinaria para eliminar la tendencia de la serie.
+```
+
+```{r}
+n = trunc(sqrt(n))
+aTSA::adf.test(ts, nlag = n+1)
+summary(urca::ur.df(ts, lags = n))
+```
+
+
+```{r}
+dts = diff(ts, lag = 1)
+
+par(nfrow = c(1,1))
+plot.ts(dts, ylab = '', main = 'Tasa de desempleo (Mujeres)', col = 'darkblue')
+mtext(bquote(bold('Datos sin tendencia')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+```
+
+### **Estacionalidad del proceso:**
+
+```{marginfigure}
+Como el proceso sigue presentando estacionalidad se diferencia la serie nuevamente utilizando los lags correspondiente a la tendencia (12). Luego de esto la serie ya no presenta estacionalidad ni tendencia por lo cual ya podemos definir los valore para nuestro modelo `SARIMA`.
+```
+
+```{r, fig.fullwidth=TRUE, fig.width=20, fig.height=6}
+par(mfrow=c(1,2))
+monthplot(ts, main = 'Tasa de desempleo (Mujeres)', 
+          ylab = '', xlab = 'Mes')
+mtext(bquote(bold('Datos diferenciados (Lag 1)')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+Spectrum = spectrum(ts)
+```
+
+
+```{r, fig.fullwidth = TRUE, fig.width = 20, fig.height=7}
+Ddts = diff(dts, lag = 12)
+par(mfrow = c(1,2))
+plot.ts(Ddts, main = 'Tasa de desempleo en mujeres (Colombia)',
+        ylab = 'Tiempo',xlab = '', 
+        cex = 1.2, col = 'darkblue')
+monthplot(Ddts, main = 'Tasa de desempleo en mujeres (Colombia)', 
+          ylab = '', xlab = 'Mes')
+```
+
+
+```{marginfigure}
+Al revisar el gráfico de autocorrelación y correlación parcial. Se decide dejar un modelo SARIMA con componente $p = 2, P = 2, q= 2, Q = 2$
+```
+
+
+```{r, fig.fullwidth = TRUE, fig.width = 15, fig.height=6}
+par(mfrow=c(1,2))
+acf(Ddts,lag.max = n, ci.type = 'ma', main = 'ACF')
+pacf(Ddts, lag.max = n, main = 'PACF')
+```
+
+
+### **Manejo de outliers**
+
+
+```{marginfigure}
+Al realizar un primer ajuste del modelo, observamos que existen outliers (Como se esperaba dado lo visto en la sección de Análisis descriptivo). Por esta razón, el gráfico de residuales, los gráficos de sumas acumuladas y todas las demás pruebas darán señales de que los residuales no cumplen con los supuestos del modelo
+```
+
+```{r}
+tsTest = ts[(length(ts)-17): length(ts)]
+ts = ts[1:(length(ts)-18)]
+```
+
+
+```{r}
+modelo1 = Arima(ts, c(2, 0, 2), include.mean = FALSE,
+               seasonal = list(order = c(2, 0, 2),
+                               period = 12))
+
+residuales = modelo1$residuals
+JarqueBera.test(residuales)
+plot(residuales)
+```
+
+```{r, fig.fullwidth = TRUE, fig.width = 20, fig.height = 6, echo = FALSE}
+res = residuales
+cum=cumsum(res)/sd(res)
+N=length(res)
+cumq=cumsum(res^2)/sum(res^2)
+Af=0.948 ###Cuantil del 95% para la estad?stica cusum
+co=0.14422####Valor del cuantil aproximado para cusumsq para n/2
+LS=Af*sqrt(N)+2*Af*c(1:length(res))/sqrt(N)
+LI=-LS
+LQS=co+(1:length(res))/N
+LQI=-co+(1:length(res))/N
+par(mfrow=c(1,2))
+plot(cum,type="l",ylim=c(min(LI),max(LS)),xlab="t",ylab="",main="CUSUM")
+lines(LS,type="S",col="red")
+lines(LI,type="S",col="red")
+#CUSUM Square
+plot(cumq,type="l",xlab="t",ylab="",main="CUSUMSQ")                      
+lines(LQS,type="S",col="red")                                                                           
+lines(LQI,type="S",col="red")
+```
+
+### **Primera identificación de Outliers**
+
+```{marginfigure}
+En una primera aproximación encontramos 9 valores atípicos en la serie. Note que los valores pertenecientes a la serie del año 2020 se encuentran alrededor de los índices 240 a 250. 
+```
+
+
+```{r}
+coeficientes = coefs2poly(modelo1)
+outliers = locate.outliers(residuales, coeficientes)
+outliers
+```
+
+```{marginfigure}
+Luego de la inclusión de los efectos de los outliers, vemos que lso residuales tienen un mejor comportamiento. Sin embargo, si ejecutamos la prueba otra vez volveremos a encontrar outliers encontraremos tres datos atípicos más. Que deberemos incluir nuevamente.
+```
+
+
+```{r}
+xreg = outliers.effects(outliers, length(ts))
+modelo2 = Arima(ts, order = c(2, 0, 2), xreg = xreg,
+                seasonal = list(order = c(2, 0, 2),period = 12))
+residuales = modelo2$residuals
+plot(residuales)
+```
+
+```{r}
+coeficientes = coefs2poly(modelo2)
+outliers = locate.outliers(residuales, coeficientes)
+outliers
+```
+
+### **Modelo final**
+
+```{marginfigure}
+En esta ocasión no volveremos a encontrar outliers por lo que podemos finalmente empezar a verificar los supuestos de los residuales. 
+```
+
+
+```{r}
+xreg2 = outliers.effects(outliers, length(ts))
+modelo3 = Arima(ts, order = c(2, 0, 2), xreg = cbind(xreg,xreg2),
+                seasonal = list(order = c(2, 0, 2),period = 12))
+residuales = modelo3$residuals
+plot(residuales)
+```
+
+
+```{r}
+coeficientes = coefs2poly(modelo3)
+outliers = locate.outliers(residuales, coeficientes)
+outliers
+```
+

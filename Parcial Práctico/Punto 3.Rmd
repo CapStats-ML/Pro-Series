@@ -1,0 +1,115 @@
+# Obtenga los residuales de cada modelo ajustado y realice un chequeo de la gráfica, así como de la función de autocorrelación de los residuales. ¿Qué puede usted decir al respecto para cada modelo?
+
+## RESIDUALES PARA EL MODELO DE REDES NEURONALES 
+
+```{python Residuales, eval=FALSE,  python.reticulate = FALSE}
+residuals_train = y_train - train_predictions
+residuals_val = y_val - val_predictions
+residuals_test = y_test - test_predictions
+
+Resid = np.concatenate([residuals_train, residuals_val, residuals_test])
+
+plt.figure(figsize=(14, 6))
+
+# Graficar los valores reales y predicciones del conjunto de entrenamiento
+plt.plot(FechasT, Resid , label='Residuales del Modelo', linestyle='-', color='red')
+
+split_date_val = y_val.index[0]
+plt.axvline(x=split_date_val, color='purple', linestyle='--')
+split_date_test = y_test.index[0]
+plt.axvline(x=split_date_test, color='blue', linestyle='--')
+
+plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
+
+plt.title('Grafico de Residuales', fontweight = 'bold', fontsize = 'large')
+plt.xlabel('Fecha', fontweight = 'medium', fontsize = 'medium')
+plt.ylabel('Y - Y-pred', fontweight = 'medium', fontsize = 'medium')
+plt.grid(True)
+plt.tight_layout()
+plt.legend(fontsize= 10)
+
+plt.savefig('Residuales.png', format='png', dpi=300)  # Ajusta dpi para la calidad
+plt.show()
+```
+
+![Residuales](Residuales.png)
+
+En la grafica de los residuales podemos observar como estos se mantienen al rededor de 0 en la mayoría de los casos, sin embargo, se observa un comportamiento de los residuales en el conjunto de validación y test, donde se presentan valores atípicos que se alejan de 0. 
+
+```{python ACF-PACF, eval=FALSE,  python.reticulate = FALSE}
+
+from statsmodels.graphics.tsaplots import plot_acf, plot_acf
+import matplotlib.pyplot as plt
+
+# ACF de los residuales
+plt.figure(figsize=(14, 6))
+
+# Gráfico ACF de los residuales
+plt.subplot(1, 2, 1)  # 1 fila, 2 columnas, 1ª posición
+plot_acf(Resid, lags=100, ax=plt.gca())
+plt.title('Función de Autocorrelación\n(ACF) de los Residuales', fontweight='bold', fontsize='large')
+plt.grid(True)
+
+# Gráfico ACF con método OLS
+plt.subplot(1, 2, 2)  # 1 fila, 2 columnas, 2ª posición
+plot_pacf(Resid, lags=100, method='ols', ax=plt.gca())
+plt.title('Autocorrelación Parcial (PACF)\nde los Residuales (Método OLS)', fontweight='bold', fontsize='large')
+plt.grid(True)
+
+plt.tight_layout()
+
+plt.savefig('ACF_PACF.png', format='png', dpi=300)  # Ajusta dpi para la calidad
+plt.show()
+```
+
+
+![ACF_PACF](ACF_PACF.png)
+
+- Interpretacion para el grafico de Autocorrelación (ACF) de los Residuales:
+  - La presencia de autocorrelaciones significativas, aunque menores, sugiere que incluso el modelo LSTM no ha capturado completamente todos los patrones temporales en los datos.
+  - El patrón oscilatorio decreciente podría indicar una estacionalidad residual que el modelo LSTM no ha modelado totalmente.
+
+- Interpretacion para el grafico Autocorrelación Parcial (PACF) de los Residuales:
+  - Los picos dispersos y significativos en varios lags indican que aún hay algunas dependencias temporales no lineales que el modelo LSTM no ha capturado completamente.
+  
+Basandonos en estos resultados del ACF y PACF, podemos decir que en general, el modelo LSTM parece estar haciendo un trabajo razonable, ya que la mayoría de las autocorrelaciones están dentro de las bandas de confianza. Por otra parte, La presencia de autocorrelaciones residuales sugiere que los datos tienen una estructura temporal muy compleja que incluso una LSTM está teniendo dificultades para capturar completamente
+
+
+## MODELO SARIMA
+
+```{marginfigure}
+La serie resultante no presenta evidencia de outliers ni de ningún comportamiento anomálo que haga pensar en no estacionaridad. Además de esto, las pruebas dicen que los residuales son normales y que además no presentan evidencia de correlación. Si a esto añadimos que los gráficos de sumas acumuladas muestran un comportamiento deseable podemos decir que la serie está lista para hacer predicciones.
+```
+
+
+```{r, fig.height=8}
+par(mfrow = c(2,1))
+plot(residuales, main = 'Residuales ARIMA(2,0,2)(2,0,2)[12]')
+acf(residuales)
+```
+
+```{r}
+Box.test(residuales, lag = n, type = "Ljung-Box", fitdf = 2)
+jarque.bera.test(residuales)
+```
+
+```{r, fig.fullwidth = TRUE, fig.width = 20, fig.height = 6, echo = FALSE}
+res = residuales
+cum=cumsum(res)/sd(res)
+N=length(res)
+cumq=cumsum(res^2)/sum(res^2)
+Af=0.948 ###Cuantil del 95% para la estad?stica cusum
+co=0.14422####Valor del cuantil aproximado para cusumsq para n/2
+LS=Af*sqrt(N)+2*Af*c(1:length(res))/sqrt(N)
+LI=-LS
+LQS=co+(1:length(res))/N
+LQI=-co+(1:length(res))/N
+par(mfrow=c(1,2))
+plot(cum,type="l",ylim=c(min(LI),max(LS)),xlab="t",ylab="",main="CUSUM")
+lines(LS,type="S",col="red")
+lines(LI,type="S",col="red")
+#CUSUM Square
+plot(cumq,type="l",xlab="t",ylab="",main="CUSUMSQ")                      
+lines(LQS,type="S",col="red")                                                                           
+lines(LQI,type="S",col="red")
+```

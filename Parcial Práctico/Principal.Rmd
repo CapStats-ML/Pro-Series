@@ -1,0 +1,98 @@
+---
+title: "Series de tiempo univaridas"
+subtitle: "Examen final (Práctica)"
+author: 
+  - name: Michel Mendivenson Barragán Zabala
+    email: mbarraganz@unal.edu.co
+  - name: Cesar Augusto Prieto Sarmiento
+    email: ceprieto@unal.edu.co
+date: "`r Sys.Date()`"
+output: 
+  tint::tintHtml:
+    highlight-style: pygments
+link-citations: yes
+---
+
+<!-- Tenga en cuenta que: -->
+<!--   - El documento se renderiza de forma lineal (Primero los bloques antes del punto 1, -->
+<!--     luego el punto 1, después el código que haya después del punto 1) por ende es importante: -->
+
+<!--     * Cargar todas las librerías dentro de este documento o utilizar :: para cargar funciones
+           específicas -->
+<!--     * No volver a leer la serie cada vez. La carga de datos se hará acá.  -->
+<!--     * Comentar después de cada punto qué transformaciones se le hicieron o no a las series -->
+<!--       y los nombres de las variables transformadas con el fin de poder continuar trabajando -->
+<!--       sin problemas y sin necesidad de abrir y leer cada punto.  -->
+<!--     * Las variables en el punto i estarán disponibles para los punto i + c con c > 0.  -->
+<!--   - La serie original simplemente se va a llamar ts por simplicidad. -->
+
+```{css, echo=FALSE}
+.spacer {
+    height: 1cm; /* Espacio de 1 cm */
+}
+```
+
+<!-- CARGA DE LIBRERÍAS -->
+
+A continuación se cargan las librerías de `R` necesarias para el desarrollo de parcial:
+```{r, echo = TRUE, message= FALSE}
+library(readxl)
+library(MASS)
+library(dplyr)
+library(tsibble)
+library(latex2exp)
+library(astsa)
+library(forecast)
+library(tsoutliers)
+```
+
+## **Lectura de los datos**
+
+
+Considere la serie de tiempo mensual que le correspondió del archivo del archivo `Base_de_datos_Parcial.xslx` las cuales están relacionadas a temáticas de empleo/desempleo en Estados Unidos y Colombia. Asuma la siguiente configuración para los datos: los datos de entrenamiento van desde el mes donde esté el primer dato hasta diciembre de del año 2021, los datos de validación corresponden desde enero de 2022 hasta diciembre de 2022, mientras que los datos de prueba van desde enero de 2023 hasta abril de 2024.
+
+
+```{r, echo = TRUE, message=FALSE}
+ts = read_xlsx(path = 'Base_de_datos_Parcial.xlsx', range = 'M2:M295', col_names = FALSE)
+ts = ts(data = ts, start = c(2000,1), frequency = 12)
+```
+
+```{r, echo = FALSE,fig.width = 15, fig.height = 6, fig.fullwidth = TRUE, warning=FALSE, cache=TRUE}
+plot.ts(ts, main = 'Tasa de desempleo en mujeres (Colombia)',
+        ylab = 'Tiempo', xlab = 'Tasa de desempleo', 
+        cex = 1.2, col = 'darkblue')
+```
+
+La serie a simple vista parece presentar una estacionalidad más o menos mensual y también una estacionalidad de ciclo 4 años. Además, la serie tiene el comportamiento anomálo para el año 2020.
+
+<div class="spacer"></div>
+
+---
+
+```{r child = 'Punto 1.Rmd'}
+```
+
+<div class="spacer"></div>
+
+
+---
+
+```{r child = 'Punto 2.Rmd'}
+```
+
+
+<div class="spacer"></div>
+
+---
+
+```{r child = 'Punto 3.Rmd'}
+```
+
+
+<div class="spacer"></div>
+
+---
+
+```{r child = 'Punto 4.Rmd'}
+```
+

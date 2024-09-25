@@ -1,0 +1,44 @@
+# Obtenga el error cuadrático medio de predicción dos pasos adelante basado en los modelos ajustados del punto anterior y el conjunto de prueba. ¿Cuál modelo escogería basado en este criterio únicamente? Con base en el modelo seleccionado, realice el pronóstico para junio de 2024 con origen de pronóstico en abril de 2024. Recuerde que el modelo que va a usar para hacer el pronóstico final debe ser entrenado con todo el conjunto de datos.
+
+## RESIDUALES PARA EL MODELO DE REDES NEURONALES 
+
+```{python ECM-LSTM, eval=FALSE,  python.reticulate = FALSE}
+import pandas as pd
+from sklearn.metrics import mean_squared_error
+
+# Calcular MSE para cada conjunto
+mse_train = mean_squared_error(y_train, train_predictions)
+mse_val = mean_squared_error(y_val, val_predictions)
+mse_test = mean_squared_error(y_test, test_predictions)
+mse_total = mean_squared_error(ObsT, PredT)
+
+# Crear un DataFrame para mostrar los resultados
+mse_results = pd.DataFrame({
+    'Conjunto': ['Entrenamiento', 'Validación', 'Prueba', 'Total'],
+    'MSE': [mse_train, mse_val, mse_test, mse_total]
+})
+
+# Mostrar la tabla
+print(mse_results)
+```
+
+```{r echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+df <- data.frame(
+  Conjunto = c("Entrenamiento", "Validación", "Prueba", "Total"),
+  MSE = c(3.161561, 1.719881, 10.874646, 3.540522)
+)
+
+kable(df, 
+      align = c('l', 'r'),
+      col.names = c("Conjunto", "MSE"),
+      digits = 6) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  row_spec(0, bold = T, color = "white", background = "#D7261E")
+```
+
+
+
+

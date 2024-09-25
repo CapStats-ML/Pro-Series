@@ -1,0 +1,157 @@
+#  Punto 1: Haga una análisis descriptivo de la serie de tiempo, es decir, realice todos los análisis necesarios para detectar las posibles características que tiene presente la serie. ¿Qué puede usted observar al respecto?
+
+
+## **Análisis de la estabilidad de la varianza**
+
+Para el año 2020, la serie presenta un cambio drástico en relación con el comportamiento para los demás años. Es decir, es probable que sea necesario estabilizar la varianza como primera medida:
+
+
+
+```{marginfigure}
+El valor de $\lambda$ que maximiza la log verosimilitud es apróximadamente -0.66666 además de no generar cambios importantes en la estructura de la serie, valores de lambda menores a cero generan problemas para aplicar la inversa de la transformada. Por ello se decide continuar con la serie original para los posteriores análisis y planteamientos de modelos.
+```
+
+
+```{r}
+box = boxcox(object = lm(ts ~  1), seq(-1.5,0, length = 80))
+```
+
+
+```{r}
+lambda = box$x[which.max(box$y)]
+```
+
+
+
+## **Autocorrelación y autocorrelación parcial**
+
+
+
+```{r ACF,fig.width = 15, fig.height = 6, fig.fullwidth = TRUE, warning=FALSE, cache=TRUE}
+n = length(ts)
+par(mfrow = c(1,2))
+acf(ts, lag.max = trunc(sqrt(n)), main = 'ACF Tasa de desempleo en mujeres (Colombia)')
+acf(ts, lag.max = trunc(sqrt(n)), main = 'ACF Tasa de desempleo en mujeres (Colombia)', ci.type = 'ma')
+```
+
+
+```{marginfigure}
+La serie podría verse bien representada por un modelo con un orden de medias móviles de 17 y un orden de autoregresión de máximo 4. Aunque este último podría no ser significativo y por ende los datos podrian modelarse de forma correcta solamente con los ordenes de medias móviles.
+```
+
+
+```{r PACF}
+par(mfrow = c(1,1))
+pacf(ts, lag.max = trunc(sqrt(n)), main = 'PACF Tasa de desempleo en mujeres (Colombia)')
+```
+
+## **Descomposición STL**
+
+```{marginfigure}
+Al descomponer la serie observamos que tiene una tendencia no tan pronunciada (Que podría incluirse como componente estacional) y al parecer una componente estacional de ciclo más o menos anual. De esta forma, extraemos la tendencia de la serie para presentar el análisis de estacionalidad. Además, si analizamos de nuevo el ACF y el PACF encontraremos que la orden de los elementos autoregresivos y de medias móviles ahora ha cambiado de 14 y 1 a 6 y 7 respectivamente por lo que es importante incluir la tendencia en el análisis también.
+```
+
+
+```{r, echo = FALSE}
+STL = decompose(x = ts)
+plot(STL)
+```
+```{r, fig.height=4, fig.width = 20, fig.fullwidth = TRUE}
+ts_sintend = ts - STL$trend
+ts_sintend = na.omit(ts_sintend)
+
+par(mfrow= c(1,2))
+acf(ts_sintend, lag.max = trunc(sqrt(n)), main = 'ACF Tasa de desempleo en mujeres (Colombia)', ci.type = 'ma')
+mtext(bquote(bold('Datos sin tendencia')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+pacf(ts_sintend, lag.max = trunc(sqrt(n)), main = 'PACF Tasa de desempleo en mujeres (Colombia)')
+mtext(bquote(bold('Datos sin tendencia')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+```
+
+
+
+```{r, fig.width=20, fig.height=6, fig.fullwidth=TRUE}
+par(mfrow = c(1,1))
+plot(ts_sintend, ylab = '', main = 'Tasa de desempleo (Mujeres)', col = 'darkblue')
+mtext(bquote(bold('Datos sin tendencia')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+```
+
+
+## **Análisis de la estacionalidad**
+
+### **Subseries mensuales:**
+
+
+```{marginfigure}
+Dentro de las subseries mensuales, no es tan notable el cambio en la media mensual debido a los picos altos presumiblemente relacionados con el año 2020 (Pandemia). Por lo que tal vez sea necesario considerar la información de este año como outliers dentro de los modelos que propongamos. Sin embargo, sí es cierto que se presenta cierta estacionalidad de ciclo anual.
+```
+
+
+```{r}
+monthplot(ts_sintend, main = 'Tasa de desempleo (Mujeres)', 
+          ylab = '', xlab = 'Mes')
+mtext(bquote(bold('Datos sin tendencia (Subseries mensuales)')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+```
+
+
+### **Boxplot mensual:**
+
+```{marginfigure}
+Dentro de las subseries mensuales ahora sí podemos evidenciar claros outliers. De nuevo presumiblemente causados por los valores de 2020, identificaremos estos ouliers con la función `forecast::tsoutliers`
+```
+
+
+```{r}
+df = as.data.frame(ts_sintend)
+colnames(df) = c('Desempleo')
+df$Month <- factor(month.name[cycle(ts_sintend)], levels = month.name)
+boxplot(Desempleo ~ Month, data = df, main = "Tasa de desempleo mensual (Mujeres)", 
+              ylab = "Desempleo", col = "lightblue", las = 2)
+```
+
+Al cambiar la escala de los gráficos para poder evidenciar mejor el cambio del nivel medio relacionado con el año, obtenemos las siguientes gráficas: 
+
+```{r, echo = FALSE, fig.width=20, fig.height=10, fig.fullwidth=TRUE}
+par(mfrow = c(2,1))
+
+monthplot(ts_sintend, main = 'Tasa de desempleo (Mujeres)', 
+          ylab = '', xlab = 'Mes', ylim = c(-3,3))
+mtext(bquote(bold('Datos sin tendencia (Subseries mensuales)')), side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+
+boxplot(Desempleo ~ Month, data = df, main = "Tasa de desempleo mensual (Mujeres)", 
+              ylab = "Desempleo", col = "lightblue", las = 2, ylim = c(-3,3))
+```
+
+Que muestran un alza en el nivel promedio de la tasa de desempleo para los meses de Junio, Mayo y Agosto mientras que para los demás meses el nivel promedio es menor. 
+
+### **Periodograma:**
+
+```{marginfigure}
+Como los valores  máximos son o 1 o cerca de 1 o múltiplos de 1, el periodograma aporta más evidencia para la inclusión de estacionalidad mensual dentro del modelo que planteemos para la predicción de la serie.
+```
+
+
+```{r, echo = FALSE}
+Spectrum <- spectrum(ts_sintend, log = 'no', main = 'Periodogram')
+mtext(TeX('Frequency $\\times$ 12', bold = T),
+      side = 3, line = 0.5, adj = 0.5, cex = 0.8, col = 'darkgray')
+frecuencias = Spectrum$freq
+Periodograma = Spectrum$spec
+
+for (i in 1:3){
+  ind = which.max(Periodograma)
+  abline(v = frecuencias[ind], col = 'darkred', lty = 2)
+  Periodograma = Periodograma[-ind]
+  frecuencias = frecuencias[-ind]
+}
+```
+
+### Gráfico de retardos
+
+```{r, fig.fullwidth = TRUE, fig.width=15, fig.height=15}
+par(cex.lab = 2)
+lag1.plot(ts_sintend, max.lag = trunc(sqrt(n)))
+```
+
+
+
+> **En conclusión, la serie muestra evidencias para incluir una componente estacional y una componente de tendencia en los modelos que se van a proponer.  Además de esto, los rezagos hasta de orden dos presentan una relación lineal significativa con el valor actual de la serie.**
